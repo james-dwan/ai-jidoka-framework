@@ -1,22 +1,22 @@
 """Interactive local Kanban board — the collaboration surface for development.
 
-A zero-dependency web app over :class:`LocalKanbanBoard`:
+A zero-dependency web app over :class:`LocalKanbanBoard`, deliberately limited
+to interactions that also exist in Microsoft Planner/Teams:
 
-- drag tickets between Open / In progress / Done lanes
-- open a ticket to read and edit its full analysis (5 Whys, root cause,
-  countermeasure) in place
-- add timestamped notes — your half of the conversation with the agents
-- "Ask the Sensei" on any ticket: the Sensei re-reads the current analysis and
-  replaces its questions section in the description
+- drag tickets between Open / In progress / Done lanes (Planner: group by
+  progress)
+- open a ticket to read and edit its description in place (Planner: task notes)
+- add timestamped notes (Planner: comments)
 
-In production the same interactions happen in Microsoft Planner or Lists
-(the agents talk to whichever board the config names); this server gives the
-local JSON board the same feel.
+There is intentionally no "invoke the AI" button — that doesn't exist in
+Planner either. The agents (Kaizen Teammate, Sensei, Reflection) interact with
+the board autonomously by reading and writing tickets; your channel to them is
+the ticket itself. The page auto-refreshes, so you see the agents working.
 
 Usage::
 
     from kaizen.board_server import serve_board
-    serve_board(config, board, sensei=SenseiAgent(config, llm=...))
+    serve_board(config, board)
 """
 
 from __future__ import annotations
@@ -28,11 +28,10 @@ import re
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Optional
+from typing import Any
 
 from .config import KaizenConfig
 from .kanban_integration import KanbanBoard
-from .sensei_agent import SenseiAgent
 
 STATUSES = ["open", "in_progress", "done"]
 
@@ -40,13 +39,12 @@ STATUSES = ["open", "in_progress", "done"]
 def serve_board(
     config: KaizenConfig,
     board: KanbanBoard,
-    sensei: Optional[SenseiAgent] = None,
     host: str = "127.0.0.1",
     port: int = 8765,
     open_browser: bool = True,
 ) -> None:
     """Serve the interactive board (blocks until Ctrl-C)."""
-    server = make_server(config, board, sensei, host, port)
+    server = make_server(config, board, host, port)
     url = f"http://{host}:{server.server_address[1]}/"
     print(f"Kaizen board: {url}  (Ctrl-C to stop)")
     if open_browser:
@@ -59,8 +57,7 @@ def serve_board(
         server.server_close()
 
 
-def make_server(config, board, sensei=None, host="127.0.0.1", port=8765) -> ThreadingHTTPServer:
-    sensei = sensei or SenseiAgent(config)
+def make_server(config, board, host="127.0.0.1", port=8765) -> ThreadingHTTPServer:
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):  # keep the demo console quiet
@@ -96,13 +93,31 @@ def make_server(config, board, sensei=None, host="127.0.0.1", port=8765) -> Thre
                     "process": config.process_name,
                     "sandbox": config.sandbox,
                     "statuses": STATUSES,
+                    "buckets": list(config.kanban.get("buckets", {}).values()) or ["Exceptions"],
                     "tickets": [t.to_dict() for t in board.list_tickets()],
                 })
             else:
                 self._json({"error": "not found"}, 404)
 
         def do_POST(self):
-            match = re.fullmatch(r"/api/tickets/([\w-]+)(/note|/coach)?", self.path)
+            if self.path == "/api/tickets":  # add a card (Planner: "Add task")
+                body = self._body()
+                title = str(body.get("title", "")).strip()
+                if not title:
+                    self._json({"error": "title required"}, 400)
+                    return
+                from .kanban_integration import KanbanTicket
+
+                ticket = board.create_ticket(KanbanTicket(
+                    title=title[:250],
+                    description=str(body.get("description", "")).strip(),
+                    bucket=str(body.get("bucket", "Improvement Ideas")),
+                    labels=["human-raised"],
+                    priority="low",
+                ))
+                self._json(ticket.to_dict())
+                return
+            match = re.fullmatch(r"/api/tickets/([\w-]+)(/note)?", self.path)
             if not match:
                 self._json({"error": "not found"}, 404)
                 return
@@ -120,8 +135,6 @@ def make_server(config, board, sensei=None, host="127.0.0.1", port=8765) -> Thre
                             ticket_id,
                             description=ticket.description + f"\n\n**Note ({stamp}):** {text}",
                         )
-                elif action == "/coach":
-                    sensei.coach_ticket(board, ticket, recoach=True)
                 else:  # field updates: status / bucket / description
                     changes = {k: v for k, v in self._body().items()
                                if k in ("status", "bucket", "description")}
@@ -206,6 +219,15 @@ def _page(config: KaizenConfig) -> str:
 </head>
 <body>
 <h1>Kaizen board — """ + title + """</h1>
+<div class="row" style="margin-bottom:14px">
+  <input id="new-title" placeholder="Raise an idea or observation…"
+         style="flex:1;min-width:260px;font:13px system-ui;padding:7px 10px;
+                border:1px solid var(--border);border-radius:8px;
+                background:var(--surface);color:var(--ink)">
+  <select id="new-bucket" style="font:13px system-ui;padding:7px;border-radius:8px;
+                border:1px solid var(--border);background:var(--surface);color:var(--ink)"></select>
+  <button id="add-card">Add card</button>
+</div>
 <div class="lanes" id="lanes"></div>
 
 <div id="overlay">
@@ -214,7 +236,6 @@ def _page(config: KaizenConfig) -> str:
     <textarea id="desc" spellcheck="false"></textarea>
     <div class="row">
       <button class="primary" id="save">Save analysis</button>
-      <button id="sensei">Ask the Sensei</button>
       <span id="status-msg"></span>
     </div>
     <div class="row">
@@ -237,6 +258,15 @@ async function api(path, opts) {
 async function refresh() {
   const s = await api("/api/state");
   tickets = s.tickets;
+  const sel = document.getElementById("new-bucket");
+  if (!sel.options.length) {
+    for (const b of s.buckets) {
+      const o = document.createElement("option");
+      o.value = o.textContent = b;
+      if (b === "Improvement Ideas") o.selected = true;
+      sel.appendChild(o);
+    }
+  }
   render();
   if (current) {
     const t = tickets.find(t => t.id === current.id);
@@ -295,18 +325,12 @@ document.getElementById("save").onclick = async () => {
     body: JSON.stringify({description: document.getElementById("desc").value})});
   msg("Saved."); refresh();
 };
-document.getElementById("sensei").onclick = async (e) => {
-  e.target.disabled = true; e.target.textContent = "Sensei is reading…";
-  try {
-    // save current edits first so the sensei reviews what you see
-    await api(`/api/tickets/${current.id}`, {method:"POST",
-      body: JSON.stringify({description: document.getElementById("desc").value})});
-    await api(`/api/tickets/${current.id}/coach`, {method:"POST", body:"{}"});
-    msg("The Sensei has responded — see the end of the ticket.");
-  } finally {
-    e.target.disabled = false; e.target.textContent = "Ask the Sensei";
-    refresh();
-  }
+document.getElementById("add-card").onclick = async () => {
+  const input = document.getElementById("new-title");
+  if (!input.value.trim()) return;
+  await api("/api/tickets", {method:"POST", body: JSON.stringify({
+    title: input.value, bucket: document.getElementById("new-bucket").value})});
+  input.value = ""; refresh();
 };
 document.getElementById("add-note").onclick = async () => {
   const note = document.getElementById("note");

@@ -282,6 +282,13 @@ class ListsKanbanBoard(_GraphBoard):
         return result
 
 
+def rule_from_title(title: str) -> str:
+    """Exception tickets are titled '[SEVERITY] rule-name: summary'."""
+    if "]" in title and ":" in title:
+        return title.split("]", 1)[1].split(":", 1)[0].strip()
+    return ""
+
+
 def create_board(kanban_config: Dict[str, Any],
                  token_provider: Optional[Callable[[], str]] = None) -> KanbanBoard:
     """Build a board from the ``kanban`` section of the config."""

@@ -170,9 +170,75 @@ class ReflectionAgent:
                 labels=["kaizen"],
             ))
             summary.ticket_id = ticket.id
+            self.raise_improvement_ideas(sqdip)
 
         self.runlog.record("daily_reflection", day=day.isoformat(), report=str(report_path))
         return summary
+
+    # -- improvement ideas --------------------------------------------------
+
+    def raise_improvement_ideas(self, sqdip: SQDIPSnapshot) -> List[KanbanTicket]:
+        """The AI's own suggestion cards — things it noticed in the process.
+
+        Ideas go to the 'Improvement Ideas' bucket (humans add theirs the same
+        way, from the board or Planner). Deduplicated by title so the agent
+        never spams the board; the team triages them in the daily kata.
+        """
+        if self.board is None or self.config.sandbox:
+            return []
+        bucket = self.config.kanban.get("buckets", {}).get("ideas", "Improvement Ideas")
+        existing_titles = {t.title.strip().lower() for t in self.board.list_tickets(bucket=bucket)}
+        raised = []
+        for title, rationale in self._idea_candidates(sqdip):
+            if title.strip().lower() in existing_titles:
+                continue
+            ticket = self.board.create_ticket(KanbanTicket(
+                title=title[:250],
+                description=(f"{rationale}\n\n_Raised by the reflection agent — if the team "
+                             "agrees it's worth trying, move it to Experiments and trial it "
+                             "in sandbox mode first._"),
+                bucket=bucket,
+                labels=["idea", "ai-raised"],
+                priority="low",
+            ))
+            raised.append(ticket)
+            self.runlog.record("idea_raised", ticket_id=ticket.id, title=title, source="ai")
+        return raised
+
+    def _idea_candidates(self, sqdip: SQDIPSnapshot) -> List[tuple]:
+        """Up to two concrete ideas: LLM-drafted when available, else derived
+        deterministically from the most recurrent abnormality."""
+        if self.llm is not None:
+            prompt = (
+                f"You are the reflection agent on a joint human-AI Kaizen team for the process "
+                f"'{self.config.process_name}'. Based on this SQDIP snapshot and exception "
+                f"pattern, propose at most TWO concrete process-improvement ideas (poka-yokes, "
+                f"upstream gates, standard-work changes). Only propose what the data supports.\n\n"
+                f"{sqdip.to_markdown(self.config.sqdip_targets)}\n\n"
+                f"Exceptions by rule: {sqdip.exceptions_by_rule}\n\n"
+                "Respond ONLY with lines in the form 'IDEA: <short title> — <one-sentence "
+                "rationale>'. Respond NONE if nothing is warranted."
+            )
+            try:
+                text = getattr(self.llm.invoke(prompt), "content", "")
+                ideas = []
+                for line in text.splitlines():
+                    line = line.strip().lstrip("-* ")
+                    if line.upper().startswith("IDEA:") and "—" in line:
+                        title, rationale = line[5:].split("—", 1)
+                        ideas.append((f"Idea: {title.strip()}", rationale.strip()))
+                return ideas[:2]
+            except Exception:
+                pass  # fall through to the deterministic candidate
+        if sqdip.exceptions_by_rule:
+            top_rule, count = max(sqdip.exceptions_by_rule.items(), key=lambda kv: kv[1])
+            if count >= 2:
+                return [(
+                    f"Idea: error-proof '{top_rule}' at the source",
+                    f"'{top_rule}' occurred {count}x today — recurring abnormalities are "
+                    "candidates for a poka-yoke upstream rather than repeated detection.",
+                )]
+        return []
 
     # -- internals ---------------------------------------------------------
 

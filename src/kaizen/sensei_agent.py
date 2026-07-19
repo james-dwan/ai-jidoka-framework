@@ -162,7 +162,8 @@ class SenseiAgent:
                 "You have a causal chain but no countermeasure. What is the smallest "
                 "experiment that would test whether removing this cause prevents the problem?"
             )
-        if analysis.countermeasure and "verify" not in analysis.countermeasure.lower():
+        if analysis.countermeasure and not re.search(
+                r"verif|measur|compar|monitor|check", analysis.countermeasure, re.IGNORECASE):
             questions.append(
                 "How will you check the countermeasure actually worked — what will you "
                 "measure, and when will you look?"

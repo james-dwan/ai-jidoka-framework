@@ -29,7 +29,9 @@ Read the full [white paper](docs/AI-Jidoka-Framework-White-Paper.md).
 | **SQDIP** | Safety, Quality, Delivery, Inventory, Productivity computed daily from the run log, scored against your targets |
 | **Daily Kaizen kata** | A Reflection Agent prepares the daily summary and improvement suggestions; humans and AI review it together |
 | **FMEA** | A registry of anticipated failure modes, ranked by RPN, folded into the daily reflection |
-| **Sensei coaching** | A Sensei Agent reviews 5 Whys analyses socratically — questioning vague problem statements, blame-the-person causes, and weak countermeasures. Questions, never answers |
+| **Kaizen Teammate** | An autonomous agent that works the shared board: one card per problem *pattern* (recurrences aggregate, "3 of 4 submissions missing"), fills in what the evidence supports, asks the team precise questions in the ticket when blocked, and picks up their answers on its next pass. It never closes tickets — humans hold the gates |
+| **Sensei coaching** | A Sensei Agent reviews 5 Whys analyses socratically — questioning vague problem statements, blame-the-person causes, and weak countermeasures. It gates the AI teammate's own proposals before they're posted, not just the humans' |
+| **Improvement ideas** | A shared Ideas bucket: humans add cards from the board; the AI raises its own (deduped) suggestion cards from the daily reflection when it spots patterns |
 | **Investigations as flows** | Each exception ticket can spawn its own checkpointed LangGraph: problem framing → Pareto → fishbone → 5 Whys → Sensei gate → countermeasure → pilot → verify → standardize. Human gates at every stage are non-optional; a weak analysis stops the flow the way bad data stops production |
 | **Standard work as a living agreement** | One versioned YAML file holds rules, prompts, targets, *and* human standard work — editable without code changes, archived on every save |
 | **Safe experimentation** | Sandbox mode logs everything but creates no tickets and takes no external actions; config versioning makes every change reversible |

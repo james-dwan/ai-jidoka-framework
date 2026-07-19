@@ -425,13 +425,159 @@ def test_board_server_api(tmp_path):
         updated = _req(port, f"/api/tickets/{ticket['id']}/note", {"text": "went and saw the export job"})
         assert "went and saw the export job" in updated["description"]
 
-        # ask the sensei
-        updated = _req(port, f"/api/tickets/{ticket['id']}/coach", {})
-        assert "**Sensei" in updated["description"]
-
         # edits + notes survive on disk
         on_disk = [t for t in board.list_tickets() if t.id == ticket["id"]][0]
         assert on_disk.status == "in_progress"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+# -- Kaizen Teammate (autonomous board work) -------------------------------
+
+from kaizen import KaizenTeammate  # noqa: E402
+
+
+class StubLLM:
+    """Returns scripted responses in order; records prompts."""
+
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.prompts = []
+
+    def invoke(self, prompt):
+        self.prompts.append(prompt)
+        class R:  # noqa: N801
+            content = self.responses.pop(0) if self.responses else "PROBLEM: OPEN"
+        return R()
+
+
+RESPONSE_WITH_QUESTION = """PROBLEM: Run exceeded the doubled-value limit of 5 (actual 20) in the double node
+WHY1: The doubled value exceeded the configured limit
+WHY2: The input value arrived larger than expected
+WHY3: OPEN
+ROOT: OPEN
+COUNTERMEASURE: OPEN
+PILOT: OPEN
+QUESTION: Where does the input value originate — is there an upstream feed that could pre-scale it?
+"""
+
+RESPONSE_COMPLETE = """PROBLEM: Run exceeded the doubled-value limit of 5 (actual 20) in the double node
+WHY1: The doubled value exceeded the configured limit
+WHY2: The input value arrived pre-doubled from the upstream feed
+WHY3: The feed changed units last week without notice
+WHY4: No contract test exists between the feed and this process
+WHY5: The integration predates the team's contract-testing standard
+ROOT: Feed integration lacks a units contract test
+COUNTERMEASURE: Add a contract test on the upstream feed units before ingestion
+PILOT: Run the feed with the contract test in sandbox mode for one week and compare exceptions
+"""
+
+
+def _board_with_ticket(tmp_path):
+    rules = [{"name": "too-big", "condition": "state.get('doubled', 0) > 5",
+              "severity": "high", "description": "Doubled value exceeded the limit"}]
+    config = make_config(tmp_path, rules=rules)
+    graph = build(tmp_path, config)
+    graph.invoke({"value": 10})
+    return config, LocalKanbanBoard(config.data["kanban"]["board_path"])
+
+
+def test_teammate_works_ticket_and_asks_the_team(tmp_path):
+    config, board = _board_with_ticket(tmp_path)
+    llm = StubLLM([RESPONSE_WITH_QUESTION])
+    teammate = KaizenTeammate(config, board, runlog=RunLog(str(tmp_path / "log.jsonl")), llm=llm)
+
+    assert teammate.work_board() == 1
+    ticket = board.list_tickets(bucket="Exceptions")[0]
+    assert ticket.status == "in_progress"          # visibly picked up by the agent
+    assert "Needs from the team" in ticket.description
+    assert "upstream feed" in ticket.description
+    # Second pass with no human input: nothing to do.
+    assert teammate.work_board() == 0
+
+
+def test_teammate_continues_after_team_note_and_proposes(tmp_path):
+    config, board = _board_with_ticket(tmp_path)
+    llm = StubLLM([RESPONSE_WITH_QUESTION, RESPONSE_COMPLETE])
+    runlog = RunLog(str(tmp_path / "log.jsonl"))
+    teammate = KaizenTeammate(config, board, runlog=runlog, llm=llm)
+    teammate.work_board()
+
+    # Human answers on the ticket (as a Planner comment / local note would).
+    ticket = board.list_tickets(bucket="Exceptions")[0]
+    board.update_ticket(ticket.id, description=ticket.description +
+                        "\n\n**Note (2026-07-19 10:12):** Yes — the nightly feed was "
+                        "switched to pre-scaled units last week.")
+
+    assert teammate.work_board() == 1              # change detected, work resumes
+    ticket = board.list_tickets(bucket="Exceptions")[0]
+    assert "Proposal ready for team review" in ticket.description
+    assert "contract test" in ticket.description
+    assert "**Note (2026-07-19 10:12):**" in ticket.description  # human note preserved
+    assert ticket.status != "done"                 # closing stays a human act
+    # The note the human wrote reached the investigator prompt on the second pass.
+    assert any("pre-scaled units" in p for p in llm.prompts)
+    events = runlog.events()
+    assert any(e["type"] == "teammate_update" and e.get("proposal_ready") for e in events)
+
+
+# -- Aggregation & improvement ideas ---------------------------------------
+
+
+def test_recurring_rule_aggregates_onto_one_card(tmp_path):
+    rules = [{"name": "too-big", "condition": "state.get('doubled', 0) > 5",
+              "severity": "low", "description": "Doubled value exceeded the limit"}]
+    config = make_config(tmp_path, rules=rules)
+    graph = build(tmp_path, config)
+    for value in (10, 11, 12):          # three incidents of the same pattern
+        graph.invoke({"value": value})
+
+    board = LocalKanbanBoard(config.data["kanban"]["board_path"])
+    tickets = board.list_tickets(bucket="Exceptions")
+    assert len(tickets) == 1            # ONE card for the pattern, not three
+    assert tickets[0].description.count("**Occurrence (") == 2  # 2nd + 3rd appended
+
+
+def test_reflection_raises_deduped_improvement_ideas(tmp_path):
+    rules = [{"name": "always", "condition": "True", "severity": "low"}]
+    config = make_config(tmp_path, rules=rules)
+    runlog = RunLog(str(tmp_path / "log.jsonl"))
+    builder = KaizenGraphBuilder(State, config, runlog=runlog)
+    builder.add_node("double", double)
+    builder.set_entry_point("double")
+    builder.set_finish_point("double")
+    graph = builder.compile()
+    graph.invoke({"value": 1})
+    graph.invoke({"value": 2})          # 'always' fires twice -> idea-worthy pattern
+
+    board = LocalKanbanBoard(config.data["kanban"]["board_path"])
+    agent = ReflectionAgent(config, runlog, board=board, reports_dir=str(tmp_path / "reports"))
+    agent.daily_reflection()
+    ideas = board.list_tickets(bucket="Improvement Ideas")
+    assert len(ideas) == 1
+    assert "always" in ideas[0].title
+    assert "ai-raised" in ideas[0].labels
+    agent.daily_reflection()            # second reflection: no duplicate idea
+    assert len(board.list_tickets(bucket="Improvement Ideas")) == 1
+
+
+def test_board_server_add_card(tmp_path):
+    config = make_config(tmp_path)
+    board = LocalKanbanBoard(config.data["kanban"]["board_path"])
+    server = make_server(config, board, port=0)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        created = _req(port, "/api/tickets",
+                       {"title": "Idea: remind consultants two days before cutoff",
+                        "bucket": "Improvement Ideas"})
+        assert created["bucket"] == "Improvement Ideas"
+        assert "human-raised" in created["labels"]
+        state = _req(port, "/api/state")
+        assert "Improvement Ideas" in state["buckets"]
+        assert any(t["id"] == created["id"] for t in state["tickets"])
     finally:
         server.shutdown()
         server.server_close()

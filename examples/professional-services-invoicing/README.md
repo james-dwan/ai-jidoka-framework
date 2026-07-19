@@ -46,13 +46,11 @@ python run_investigation.py
 #    the Kanban board, and the latest daily report) — opens in your browser
 python make_dashboard.py
 
-# 5. Serve the INTERACTIVE board: drag tickets between lanes, edit the
-#    5 Whys in a ticket, add notes, and "Ask the Sensei" in place
+# 5. Serve the live board with the autonomous Kaizen Teammate working it:
+#    it advances every exception card as far as the evidence allows, asks
+#    the team precise questions in the ticket, and picks up your notes on
+#    its next pass. You drag verified work to Done — it never closes tickets.
 python serve_board.py --llm
-
-# 6. Ticket-mediated coaching from the command line (same loop, headless)
-python coach_board.py --llm          # sensei asks questions in each ticket
-python coach_board.py --llm --recoach  # after you edit answers into tickets
 
 # Optional: have Claude write the reflection narrative and draft fishbones
 pip install '.[llm]'

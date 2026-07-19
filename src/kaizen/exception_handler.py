@@ -24,7 +24,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import yaml
 
-from .kanban_integration import KanbanBoard, KanbanTicket
+from .kanban_integration import KanbanBoard, KanbanTicket, rule_from_title
 from .runlog import RunLog
 
 
@@ -336,9 +336,28 @@ class ExceptionHandler:
                 sandbox=self.sandbox,
             )
         if self.board and not self.sandbox:
-            ticket = self.board.create_ticket(record.to_ticket(self.exception_bucket))
-            record.ticket_id = ticket.id
+            # One card per problem PATTERN, not per event: recurrences of the
+            # same rule append to the existing open ticket so the daily review
+            # sees "3 occurrences of X" on a single card, never three cards.
+            existing = self._open_ticket_for_rule(rule_name)
+            if existing is not None:
+                stamp = record.timestamp[:16].replace("T", " ")
+                self.board.update_ticket(
+                    existing.id,
+                    description=existing.description
+                    + f"\n\n**Occurrence ({stamp} UTC):** {node} — {summary}",
+                )
+                record.ticket_id = existing.id
+            else:
+                ticket = self.board.create_ticket(record.to_ticket(self.exception_bucket))
+                record.ticket_id = ticket.id
         return record
+
+    def _open_ticket_for_rule(self, rule_name: str) -> Optional[KanbanTicket]:
+        for ticket in self.board.list_tickets(bucket=self.exception_bucket):
+            if ticket.status != "done" and rule_from_title(ticket.title) == rule_name:
+                return ticket
+        return None
 
 
 def _safe_snapshot(state: Dict[str, Any], max_len: int = 500) -> Dict[str, Any]:

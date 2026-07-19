@@ -145,6 +145,7 @@ kanban:
   buckets:
     exceptions: Exceptions
     kaizen: Daily Kaizen
+    ideas: Improvement Ideas
     experiments: Experiments
   # provider: planner
   # plan_id: "<planner-plan-id>"

@@ -62,6 +62,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "buckets": {
             "exceptions": "Exceptions",
             "kaizen": "Daily Kaizen",
+            "ideas": "Improvement Ideas",
             "experiments": "Experiments",
         },
     },
