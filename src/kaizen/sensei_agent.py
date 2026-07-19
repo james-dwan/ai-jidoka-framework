@@ -87,19 +87,30 @@ class SenseiAgent:
 
     # -- coaching the board -------------------------------------------------
 
-    def coach_open_exceptions(self, board: KanbanBoard, bucket: Optional[str] = None) -> int:
-        """Append sensei questions to open exception tickets that don't have
-        them yet. Returns the number of tickets coached."""
+    #: Marks where the sensei's section begins in a ticket description.
+    SECTION_MARKER = "\n\n---\n\n**Sensei"
+
+    def coach_open_exceptions(self, board: KanbanBoard, bucket: Optional[str] = None,
+                              recoach: bool = False) -> int:
+        """Append sensei questions to open exception tickets.
+
+        With ``recoach=True``, tickets that were already coached are reviewed
+        again against their *current* description — so after humans answer the
+        questions in the ticket, the sensei responds to the updated analysis.
+        Returns the number of tickets coached this pass.
+        """
         bucket = bucket or self.config.kanban.get("buckets", {}).get("exceptions", "Exceptions")
         coached = 0
         for ticket in board.list_tickets(bucket=bucket, status="open"):
-            if "**Sensei" in ticket.description:
-                continue  # already coached
-            analysis = _parse_five_whys(ticket.description)
+            if "**Sensei" in ticket.description and not recoach:
+                continue
+            # Review the human-authored part only; replace any prior sensei section.
+            body = ticket.description.split(self.SECTION_MARKER)[0].rstrip()
+            analysis = _parse_five_whys(body)
             review = self.review(analysis)
             board.update_ticket(
                 ticket.id,
-                description=ticket.description + "\n\n---\n\n" + review.to_markdown(),
+                description=body + self.SECTION_MARKER.replace("**Sensei", "") + review.to_markdown(),
             )
             coached += 1
         return coached

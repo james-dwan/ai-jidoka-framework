@@ -346,3 +346,38 @@ def test_load_env_walks_up_and_respects_existing(tmp_path, monkeypatch):
     assert os.environ["EXTRA"] == "abc"    # 'export ' prefix handled
     assert os.environ["ALREADY"] == "original"  # existing env always wins
     assert "ALREADY" not in loaded
+
+
+def test_sensei_recoach_responds_to_updated_analysis(tmp_path):
+    rules = [{"name": "always", "condition": "True", "severity": "high",
+              "description": "Something abnormal happened in the run"}]
+    config = make_config(tmp_path, rules=rules)
+    graph = build(tmp_path, config)
+    graph.invoke({"value": 1})
+    board = LocalKanbanBoard(config.data["kanban"]["board_path"])
+    sensei = SenseiAgent(config)
+    sensei.coach_open_exceptions(board)
+
+    # Human fills in a solid analysis inside the ticket description.
+    ticket = board.list_tickets(bucket="Exceptions", status="open")[0]
+    body = ticket.description.split(SenseiAgent.SECTION_MARKER)[0]
+    body = body.replace("**Problem:**", "**Problem:** Run 42 exceeded limit 5 by 15 on 2026-07-19 —")
+    for i, why in enumerate([
+        "The doubled value exceeded the limit",
+        "The input arrived pre-doubled from the upstream feed",
+        "The feed changed units last week",
+        "No contract test exists between feed and process",
+        "Onboarding of the feed predates the contract-test standard",
+    ], start=1):
+        body = body.replace(f"{i}. Why? — _(to be answered together)_", f"{i}. Why? — {why}")
+    body = body.replace("**Root cause:** _(agree during the daily kata)_",
+                        "**Root cause:** Feed integration lacks a units contract test")
+    body = body.replace("**Countermeasure:** _(agree during the daily kata)_",
+                        "**Countermeasure:** Add the contract test; verify over one week of runs")
+    board.update_ticket(ticket.id, description=body + "\n\n---\n\n**Sensei questions** old stuff")
+
+    assert sensei.coach_open_exceptions(board) == 0            # without recoach: skipped
+    assert sensei.coach_open_exceptions(board, recoach=True) == 1
+    updated = [t for t in board.list_tickets() if t.id == ticket.id][0]
+    assert updated.description.count("**Sensei") == 1          # old section replaced
+    assert "ready to act on" in updated.description            # solid analysis accepted
