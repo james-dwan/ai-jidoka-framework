@@ -16,9 +16,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from kaizen import KaizenConfig, ReflectionAgent, RunLog, build_default_llm, create_board
+from kaizen import KaizenConfig, ReflectionAgent, RunLog, build_default_llm, create_board, load_env
 
 HERE = Path(__file__).parent
+load_env(str(HERE))  # picks up ANTHROPIC_API_KEY from a git-ignored .env
 
 
 def main() -> None:

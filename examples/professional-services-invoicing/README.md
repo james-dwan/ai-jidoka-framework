@@ -46,9 +46,11 @@ python run_investigation.py
 #    the Kanban board, and the latest daily report) — opens in your browser
 python make_dashboard.py
 
-# Optional: have Claude write the reflection narrative
-pip install '.[llm]' && export ANTHROPIC_API_KEY=...
+# Optional: have Claude write the reflection narrative and draft fishbones
+pip install '.[llm]'
+cp ../../.env.example ../../.env    # put your ANTHROPIC_API_KEY in .env (git-ignored)
 python run_daily_kaizen.py --llm
+python run_investigation.py --llm
 
 # Optional: trial changes safely — no tickets, no invoice raised
 python invoicing_workflow.py --sandbox

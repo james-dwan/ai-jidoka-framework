@@ -148,6 +148,39 @@ class KaizenConfig:
         return self.data.get("kanban", {})
 
 
+def load_env(start: Optional[str] = None) -> Dict[str, str]:
+    """Load a ``.env`` file into ``os.environ`` (existing variables win).
+
+    Walks upward from ``start`` (default: current directory) to the filesystem
+    root and loads the first ``.env`` found. Zero dependencies — supports
+    simple ``KEY=value`` lines, comments, and optional quotes. Returns the
+    variables that were newly set.
+
+    Keep secrets like ``ANTHROPIC_API_KEY`` in a git-ignored ``.env`` rather
+    than a shell profile: scoped to the project, and never committed.
+    """
+    import os
+
+    directory = Path(start or ".").resolve()
+    loaded: Dict[str, str] = {}
+    for candidate in [directory, *directory.parents]:
+        env_file = candidate / ".env"
+        if not env_file.is_file():
+            continue
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip().removeprefix("export ").strip()
+            value = value.strip().strip("'\"")
+            if key and key not in os.environ:
+                os.environ[key] = value
+                loaded[key] = value
+        break
+    return loaded
+
+
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
     for key, value in override.items():
         if isinstance(value, dict) and isinstance(base.get(key), dict):

@@ -323,3 +323,26 @@ def test_dashboard_generation(tmp_path):
     assert "too-big" in page                  # pareto row
     assert "on target" in page or "off target" in page
     assert "&" not in page.split("<style>")[0] or "&#" in page  # escaped output
+
+
+# -- .env loading ----------------------------------------------------------
+
+from kaizen import load_env  # noqa: E402
+
+
+def test_load_env_walks_up_and_respects_existing(tmp_path, monkeypatch):
+    import os
+    (tmp_path / ".env").write_text(
+        "# comment\nANTHROPIC_API_KEY='sk-test-123'\nexport EXTRA=abc\nALREADY=new\n"
+    )
+    child = tmp_path / "a" / "b"
+    child.mkdir(parents=True)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("EXTRA", raising=False)
+    monkeypatch.setenv("ALREADY", "original")
+
+    loaded = load_env(str(child))          # found two levels up
+    assert loaded["ANTHROPIC_API_KEY"] == "sk-test-123"
+    assert os.environ["EXTRA"] == "abc"    # 'export ' prefix handled
+    assert os.environ["ALREADY"] == "original"  # existing env always wins
+    assert "ALREADY" not in loaded

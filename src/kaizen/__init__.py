@@ -10,7 +10,7 @@ Author: James Dwan, Catalyst Consulting. MIT licensed.
 
 from __future__ import annotations
 
-from .config import KaizenConfig
+from .config import KaizenConfig, load_env
 from .runlog import RunLog
 from .exception_handler import (
     AbnormalityRule,
@@ -43,6 +43,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "KaizenConfig",
+    "load_env",
     "RunLog",
     "AbnormalityRule",
     "ExceptionHandler",

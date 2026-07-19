@@ -29,9 +29,11 @@ from kaizen import (
     a3_markdown,
     build_default_llm,
     create_board,
+    load_env,
 )
 
 HERE = Path(__file__).parent
+load_env(str(HERE))  # picks up ANTHROPIC_API_KEY from a git-ignored .env
 
 
 def read_answer(payload: dict) -> str:
