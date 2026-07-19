@@ -166,6 +166,8 @@ class SenseiAgent:
             text = getattr(response, "content", str(response))
         except Exception:
             return []
+        if text.strip().upper().startswith("READY"):
+            return []
         questions = [line.lstrip("-* ").strip() for line in text.splitlines()
                      if line.strip().startswith(("-", "*"))]
         return [q for q in questions if q][:3]
@@ -174,11 +176,13 @@ class SenseiAgent:
 DEFAULT_SENSEI_PROMPT = (
     "You are a Lean sensei coaching a joint human-AI team working on the process "
     "'{process_name}'. Review this root cause analysis:\n\n{analysis}\n\n"
-    "Respond ONLY with up to three socratic questions as markdown bullet points. "
-    "Never give answers, diagnoses, or countermeasures — only questions that expose "
-    "gaps in the causal chain, missing evidence (would a Pareto of the data support "
-    "this focus?), or weak countermeasures. If the analysis is genuinely solid, "
-    "respond with a single question about how they will verify the result."
+    "If the analysis is genuinely solid — a specific, measurable problem statement, "
+    "a causal chain where each why follows from the last and ends at a controllable "
+    "process cause, no blame on individuals — respond with the single word READY.\n"
+    "Otherwise respond ONLY with up to three socratic questions as markdown bullet "
+    "points. Never give answers, diagnoses, or countermeasures — only questions that "
+    "expose gaps in the causal chain, missing evidence (would a Pareto of the data "
+    "support this focus?), or blame masquerading as a root cause."
 )
 
 
