@@ -1,0 +1,106 @@
+# Live demo runbook — AI Jidoka Framework
+
+~10 minutes end to end. Run everything from this folder with the virtualenv
+active and `ANTHROPIC_API_KEY` in the repo-root `.env`.
+
+```bash
+cd examples/professional-services-invoicing
+source ../../.venv/bin/activate        # or your own venv with `pip install -e '..[llm]'`
+```
+
+To reset between rehearsals:
+
+```bash
+rm -f kaizen_board.json kaizen_runlog.jsonl kaizen_dashboard.html && rm -rf kaizen_reports
+```
+
+---
+
+## Act 1 — Jidoka: the line stops itself (~1 min)
+
+```bash
+python invoicing_workflow.py
+```
+
+**What happens:** the monthly invoicing run hits deliberately faulty data — a
+consultant who never submitted a report, a negative-hours timesheet, an
+engagement with no rate card. Two medium exceptions become tickets and the run
+*continues*; the missing rate card is high severity and **stops the line**
+before a bad invoice is raised.
+
+**Say:** "Nothing here asked a human for permission to stop. The process
+detected its own abnormality, made it visible as tickets, and refused to pass
+a defect downstream. That's Jidoka."
+
+Optional beat: `python invoicing_workflow.py --sandbox` — same stops, no
+tickets, no side effects. "This is how the team trials rule changes safely."
+
+## Act 2 — The daily kata: AI prepares, humans interpret (~2 min)
+
+```bash
+python run_daily_kaizen.py --llm
+```
+
+**What happens:** Claude computes SQDIP from the run log, reads the exception
+patterns, and writes the daily Kaizen summary — posted to the shared board as
+the standup agenda.
+
+**Point at:** the SQDIP table (red across the board — and the narrative
+correctly says Delivery failure is the root symptom, not five separate
+problems); the closing question to the team. "The AI doesn't decide — it
+prepares the conversation."
+
+## Act 3 — The investigation: an A3 as a flow (~5 min)
+
+```bash
+python run_investigation.py --llm
+```
+
+Pick the **missing-rate-card** ticket. Every stage pauses for you — the human
+gates are non-optional. Suggested inputs (finish each answer with an empty
+line):
+
+| Stage | What to type |
+|---|---|
+| `frame_problem` | `In the 2026-07 run, 88.0 hours on ENG-004 could not be billed because no rate card entry exists; standard is 100% of delivered hours billable at cutoff.` |
+| `collect_data` | `Checked the CRM: ENG-004 was created 2026-07-02 by sales; the commercial setup task is still sitting in the finance queue.` |
+| `brainstorm_causes` | `ok` (look at Claude's drafted fishbone first — it's grounded in your observation) |
+| `five_whys` — **round 1, on purpose:** | `The person who set up the engagement forgot the rate card` ⏎ `Human error` |
+
+**The moment:** the Sensei refuses to accept it and sends you back with
+socratic questions — "what in the *process* allowed a normal human action to
+become a defect?" **Say:** "The AI just rejected blame as a root cause. It
+gates the quality of the thinking, not just the data."
+
+| Stage | What to type |
+|---|---|
+| `five_whys` — round 2: | `Hours for ENG-004 could not be billed` ⏎ `ENG-004 has no entry in the rate card` ⏎ `The engagement was activated in the CRM before commercial setup finished` ⏎ `CRM activation and rate-card creation are separate manual steps with no dependency` ⏎ `The onboarding process has no gate that blocks activation until the rate card exists` ⏎ `Engagement onboarding lacks a completeness gate before activation` |
+| `design_countermeasure` | `countermeasure: add a CRM validation rule - an engagement cannot move to Active until a rate card entry exists` ⏎ `pilot: enable the rule for new engagements only for two weeks in sandbox; measure missing-rate-card exceptions` |
+| `verify` | `yes: two weeks piloted, zero missing-rate-card exceptions on new engagements` |
+
+**What happens:** the gate opens (READY), the full A3 is printed and written
+back to the ticket, and the ticket closes — but only because the pilot was
+verified.
+
+## Act 4 — The dashboard (~1 min)
+
+```bash
+python make_dashboard.py
+```
+
+**Point at:** SQDIP tiles vs targets, the exception Pareto ("where should the
+next investigation go?"), the board with the investigated ticket now done, and
+the daily report. **Close:** "One versioned YAML file holds the rules, the
+prompts, the targets, and the humans' standard work. The team improves this
+system daily — that loop, not the automation, is the product."
+
+---
+
+## If something goes wrong
+
+- **No/invalid API key:** everything still runs — `--llm` degrades to the
+  deterministic summaries with a visible note. The demo cannot crash on auth.
+- **Weird LLM output:** re-run the command; or drop `--llm` and narrate the
+  deterministic version (it makes the same structural points).
+- **Muscle-memory reset:** the `rm` line at the top restores a clean state in
+  one second.
