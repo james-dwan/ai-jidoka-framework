@@ -72,16 +72,20 @@ class KaizenTeammate:
 
     def watch(self, interval: float = 15.0) -> None:
         """Work the board forever (Ctrl-C to stop)."""
-        print(f"Kaizen teammate watching the board every {interval:.0f}s (Ctrl-C to stop)")
+        print(f"[teammate] watching the board every {interval:.0f}s (Ctrl-C to stop)", flush=True)
         while True:
+            stamp = time.strftime("%H:%M:%S")
             try:
                 worked = self.work_board()
                 if worked:
-                    print(f"[teammate] updated {worked} ticket(s)")
+                    print(f"[teammate {stamp}] updated {worked} ticket(s)", flush=True)
+                else:
+                    print(f"[teammate {stamp}] pass complete — no new input from the team",
+                          flush=True)
             except KeyboardInterrupt:
                 raise
             except Exception as exc:
-                print(f"[teammate] pass failed: {exc}")
+                print(f"[teammate {stamp}] pass FAILED: {exc}", flush=True)
             time.sleep(interval)
 
     def work_board(self) -> int:
