@@ -30,11 +30,22 @@ def main() -> None:
     config = KaizenConfig.load(str(HERE / "config" / "kaizen_config.yaml"))
     config.data["kanban"]["board_path"] = str(HERE / "kaizen_board.json")
 
+    llm = None
+    if args.llm:
+        try:
+            llm = build_default_llm()
+        except Exception as exc:
+            print(f"[!] Claude narration unavailable ({exc}).\n"
+                  "    Install the extra and set your key:\n"
+                  "      pip install 'ai-jidoka-framework[llm]'\n"
+                  "      export ANTHROPIC_API_KEY=...\n"
+                  "    Continuing with the deterministic summary.\n")
+
     agent = ReflectionAgent(
         config=config,
         runlog=RunLog(str(HERE / "kaizen_runlog.jsonl")),
         board=create_board(config.kanban),
-        llm=build_default_llm() if args.llm else None,
+        llm=llm,
         reports_dir=str(HERE / "kaizen_reports"),
     )
     summary = agent.daily_reflection()

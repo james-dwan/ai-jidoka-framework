@@ -84,11 +84,19 @@ def main() -> None:
     choice = input("Investigate which one? [0] ").strip() or "0"
     ticket = open_exceptions[int(choice)]
 
+    llm = None
+    if args.llm:
+        try:
+            llm = build_default_llm()
+        except Exception as exc:
+            print(f"[!] Claude drafting unavailable ({exc}). "
+                  "Continuing with heuristic drafts.\n")
+
     builder = InvestigationGraphBuilder(
         config,
         board,
         runlog=RunLog(str(HERE / "kaizen_runlog.jsonl")),
-        llm=build_default_llm() if args.llm else None,
+        llm=llm,
     )
     graph = builder.build()
     thread = {"configurable": {"thread_id": ticket.id}}
