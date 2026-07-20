@@ -40,7 +40,7 @@ def generate_dashboard(
         e.get("rule", "unknown") for e in runlog.events() if e.get("type") == "exception"
     ).most_common())
 
-    buckets = list(config.kanban.get("buckets", {}).values()) or ["Exceptions"]
+    buckets = list(config.kanban.get("buckets", {}).values()) or ["Problems"]
     tickets_by_bucket: Dict[str, List] = {b: board.list_tickets(bucket=b) for b in buckets}
 
     latest_report = _latest_report(reports_dir)

@@ -70,7 +70,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "provider": "local",
         "board_path": "kaizen_board.json",
         "buckets": {
-            "exceptions": "Exceptions",
+            "problems": "Problems",
             "kaizen": "Daily Kaizen",
             "ideas": "Improvement Ideas",
             "experiments": "Experiments",

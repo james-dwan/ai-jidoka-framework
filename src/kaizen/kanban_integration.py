@@ -29,7 +29,7 @@ from typing import Any, Callable, Dict, List, Optional
 class KanbanTicket:
     title: str
     description: str = ""
-    bucket: str = "Exceptions"
+    bucket: str = "Problems"
     labels: List[str] = field(default_factory=list)
     priority: str = "medium"  # low | medium | high | urgent
     checklist: List[str] = field(default_factory=list)
@@ -142,7 +142,7 @@ class PlannerKanbanBoard(_GraphBoard):
     """Microsoft Planner board via Microsoft Graph.
 
     ``bucket_ids`` maps friendly bucket names (as used in the config, e.g.
-    "Exceptions", "Daily Kaizen") to Planner bucket IDs.
+    "Problems", "Daily Kaizen") to Planner bucket IDs.
     """
 
     def __init__(self, plan_id: str, bucket_ids: Dict[str, str], token_provider: Callable[[], str]):

@@ -75,7 +75,7 @@ def main() -> None:
     config.data["kanban"]["board_path"] = str(HERE / "kaizen_board.json")
     board = create_board(config.kanban)
 
-    open_exceptions = board.list_tickets(bucket="Exceptions", status="open")
+    open_exceptions = board.list_tickets(bucket="Problems", status="open")
     if not open_exceptions:
         print("No open exception tickets. Run invoicing_workflow.py first.")
         return

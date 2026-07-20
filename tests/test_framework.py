@@ -68,7 +68,7 @@ def test_rule_triggers_stop_and_ticket(tmp_path):
     assert result["kaizen_stopped"] is True
     assert "too-big" in result["kaizen_stop_reason"]
     board = LocalKanbanBoard(config.data["kanban"]["board_path"])
-    tickets = board.list_tickets(bucket="Exceptions")
+    tickets = board.list_tickets(bucket="Problems")
     assert len(tickets) == 1
     assert "5 Whys" in tickets[0].description
 
@@ -191,7 +191,7 @@ def test_sensei_coaches_open_tickets(tmp_path):
     board = LocalKanbanBoard(config.data["kanban"]["board_path"])
     sensei = SenseiAgent(config)
     assert sensei.coach_open_exceptions(board) == 1
-    ticket = board.list_tickets(bucket="Exceptions")[0]
+    ticket = board.list_tickets(bucket="Problems")[0]
     assert "**Sensei" in ticket.description
     # Second pass is idempotent — already-coached tickets are skipped.
     assert sensei.coach_open_exceptions(board) == 0
@@ -213,7 +213,7 @@ def test_investigation_flow_end_to_end_with_sensei_gate(tmp_path):
     graph.invoke({"value": 10})
 
     board = LocalKanbanBoard(config.data["kanban"]["board_path"])
-    ticket = board.list_tickets(bucket="Exceptions", status="open")[0]
+    ticket = board.list_tickets(bucket="Problems", status="open")[0]
 
     # 2. Drive the investigation through every human gate.
     builder = InvestigationGraphBuilder(config, board, runlog=RunLog(str(tmp_path / "log.jsonl")))
@@ -275,7 +275,7 @@ def test_sensei_override_after_max_rounds(tmp_path):
     graph = build(tmp_path, config)
     graph.invoke({"value": 1})
     board = LocalKanbanBoard(config.data["kanban"]["board_path"])
-    ticket = board.list_tickets(bucket="Exceptions", status="open")[0]
+    ticket = board.list_tickets(bucket="Problems", status="open")[0]
 
     builder = InvestigationGraphBuilder(config, board, runlog=RunLog(str(tmp_path / "log.jsonl")))
     flow = builder.build()
@@ -359,7 +359,7 @@ def test_sensei_recoach_responds_to_updated_analysis(tmp_path):
     sensei.coach_open_exceptions(board)
 
     # Human fills in a solid analysis inside the ticket description.
-    ticket = board.list_tickets(bucket="Exceptions", status="open")[0]
+    ticket = board.list_tickets(bucket="Problems", status="open")[0]
     body = ticket.description.split(SenseiAgent.SECTION_MARKER)[0]
     body = body.replace("**Problem:**", "**Problem:** Run 42 exceeded limit 5 by 15 on 2026-07-19 —")
     for i, why in enumerate([
@@ -489,7 +489,7 @@ def test_teammate_works_ticket_and_asks_the_team(tmp_path):
     teammate = KaizenTeammate(config, board, runlog=RunLog(str(tmp_path / "log.jsonl")), llm=llm)
 
     assert teammate.work_board() == 1
-    ticket = board.list_tickets(bucket="Exceptions")[0]
+    ticket = board.list_tickets(bucket="Problems")[0]
     assert ticket.status == "in_progress"          # visibly picked up by the agent
     assert "Needs from the team" in ticket.description
     assert "upstream feed" in ticket.description
@@ -505,13 +505,13 @@ def test_teammate_continues_after_team_note_and_proposes(tmp_path):
     teammate.work_board()
 
     # Human answers on the ticket (as a Planner comment / local note would).
-    ticket = board.list_tickets(bucket="Exceptions")[0]
+    ticket = board.list_tickets(bucket="Problems")[0]
     board.update_ticket(ticket.id, description=ticket.description +
                         "\n\n**Note (2026-07-19 10:12):** Yes — the nightly feed was "
                         "switched to pre-scaled units last week.")
 
     assert teammate.work_board() == 1              # change detected, work resumes
-    ticket = board.list_tickets(bucket="Exceptions")[0]
+    ticket = board.list_tickets(bucket="Problems")[0]
     assert "Proposal ready for team review" in ticket.description
     assert "contract test" in ticket.description
     assert "**Note (2026-07-19 10:12):**" in ticket.description  # human note preserved
@@ -535,7 +535,7 @@ def test_non_stop_defects_are_counted_not_carded(tmp_path):
         graph.invoke({"value": value})
 
     board = LocalKanbanBoard(config.data["kanban"]["board_path"])
-    assert board.list_tickets(bucket="Exceptions") == []   # no cards for defects
+    assert board.list_tickets(bucket="Problems") == []   # no cards for defects
     # But the defects ARE counted in the run log (source of SQDIP / Pareto).
     exceptions = [e for e in RunLog(str(tmp_path / "log.jsonl")).events()
                   if e["type"] == "exception" and e["rule"] == "small-defect"]
@@ -551,7 +551,7 @@ def test_stop_recurrences_aggregate_onto_one_card(tmp_path):
         graph.invoke({"value": value})
 
     board = LocalKanbanBoard(config.data["kanban"]["board_path"])
-    tickets = board.list_tickets(bucket="Exceptions")
+    tickets = board.list_tickets(bucket="Problems")
     assert len(tickets) == 1            # ONE card for the stop pattern
     assert tickets[0].description.count("**Occurrence (") == 2
 
@@ -650,17 +650,17 @@ def test_reflection_raises_one_card_per_missed_target(tmp_path):
     graph.invoke({"value": 2})          # 2 missing-report defects across 2 runs
 
     board = LocalKanbanBoard(config.data["kanban"]["board_path"])
-    assert board.list_tickets(bucket="Exceptions") == []   # defects not carded
+    assert board.list_tickets(bucket="Problems") == []   # defects not carded
 
     agent = ReflectionAgent(config, runlog, board=board, reports_dir=str(tmp_path / "reports"))
     day = _dt.datetime.now(_dt.timezone.utc).date()
     agent.daily_reflection(day=day)
 
-    cards = [t for t in board.list_tickets(bucket="Exceptions") if "Target missed" in t.title]
+    cards = [t for t in board.list_tickets(bucket="Problems") if "Target missed" in t.title]
     assert len(cards) == 1
     assert "out of 2 runs had a missing report, against the target of <1" in cards[0].description
     assert "target-miss" in cards[0].labels
     # Re-running the review does not duplicate the card.
     agent.daily_reflection(day=day)
-    cards = [t for t in board.list_tickets(bucket="Exceptions") if "Target missed" in t.title]
+    cards = [t for t in board.list_tickets(bucket="Problems") if "Target missed" in t.title]
     assert len(cards) == 1

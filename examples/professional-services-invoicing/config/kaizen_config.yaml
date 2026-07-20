@@ -109,7 +109,7 @@ prompts:
 standard_work:
   daily_kata:
     - Review the daily Kaizen summary together (AI prepares, humans interpret).
-    - Walk the Exceptions column of the board; confirm each stop was justified.
+    - Walk the Problems column of the board; confirm each stop was justified.
     - Pick at most one exception pattern for 5 Whys root cause analysis.
     - Agree on one small countermeasure and who owns it.
     - Update rules/prompts/standard work in this file if the standard changed.
@@ -159,13 +159,13 @@ kanban:
   provider: local
   board_path: kaizen_board.json
   buckets:
-    exceptions: Exceptions
+    problems: Problems
     kaizen: Daily Kaizen
     ideas: Improvement Ideas
     experiments: Experiments
   # provider: planner
   # plan_id: "<planner-plan-id>"
   # bucket_ids:
-  #   Exceptions: "<bucket-id>"
+  #   Problems: "<bucket-id>"
   #   Daily Kaizen: "<bucket-id>"
   #   Experiments: "<bucket-id>"

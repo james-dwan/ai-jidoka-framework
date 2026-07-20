@@ -91,7 +91,7 @@ class KaizenTeammate:
     def work_board(self) -> int:
         """One pass: advance every open/in-progress exception ticket whose
         human-authored content changed since the last pass."""
-        bucket = self.config.kanban.get("buckets", {}).get("exceptions", "Exceptions")
+        bucket = self.config.kanban.get("buckets", {}).get("problems", "Problems")
         worked = 0
         for ticket in self.board.list_tickets(bucket=bucket):
             if ticket.status == "done":

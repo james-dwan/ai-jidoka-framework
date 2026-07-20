@@ -80,7 +80,7 @@ class KaizenGraphBuilder:
             runlog=self.runlog,
             stop_on_severity=config.stop_on_severity,
             sandbox=config.sandbox,
-            exception_bucket=config.kanban.get("buckets", {}).get("exceptions", "Exceptions"),
+            problem_bucket=config.kanban.get("buckets", {}).get("problems", "Problems"),
             tickets_on_stop=config.tickets.get("on_stop", True),
         )
         self._graph = StateGraph(state_schema)

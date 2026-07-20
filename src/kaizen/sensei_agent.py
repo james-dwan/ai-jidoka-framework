@@ -99,7 +99,7 @@ class SenseiAgent:
         questions in the ticket, the sensei responds to the updated analysis.
         Returns the number of tickets coached this pass.
         """
-        bucket = bucket or self.config.kanban.get("buckets", {}).get("exceptions", "Exceptions")
+        bucket = bucket or self.config.kanban.get("buckets", {}).get("problems", "Problems")
         coached = 0
         for ticket in board.list_tickets(bucket=bucket, status="open"):
             if self.coach_ticket(board, ticket, recoach=recoach):

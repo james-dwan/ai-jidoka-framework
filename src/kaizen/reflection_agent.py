@@ -192,7 +192,7 @@ class ReflectionAgent:
         sqdip = sqdip or self.compute_sqdip(day)
         events = self.runlog.events(day=day)
         period_label = f"{day.day} {day.strftime('%B')}"
-        bucket = self.config.kanban.get("buckets", {}).get("exceptions", "Exceptions")
+        bucket = self.config.kanban.get("buckets", {}).get("problems", "Problems")
 
         results: List[TargetResult] = [
             MeasureTarget.from_dict(t).evaluate(events, period_label, self.config.process_name)

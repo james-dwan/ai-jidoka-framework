@@ -147,7 +147,7 @@ def main() -> None:
 
     if result.get("kaizen_stopped"):
         print(f"\nJIDOKA STOP: {result['kaizen_stop_reason']}")
-        print("The line stopped before raising the invoice. Review the Exceptions "
+        print("The line stopped before raising the invoice. Review the Problems "
               "column on the board, complete the 5 Whys together, then re-run.")
     else:
         print(f"\nInvoice {result['invoice_reference']} raised: "

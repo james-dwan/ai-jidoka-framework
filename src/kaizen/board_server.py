@@ -93,7 +93,7 @@ def make_server(config, board, host="127.0.0.1", port=8765) -> ThreadingHTTPServ
                     "process": config.process_name,
                     "sandbox": config.sandbox,
                     "statuses": STATUSES,
-                    "buckets": list(config.kanban.get("buckets", {}).values()) or ["Exceptions"],
+                    "buckets": list(config.kanban.get("buckets", {}).values()) or ["Problems"],
                     "tickets": [t.to_dict() for t in board.list_tickets()],
                 })
             else:

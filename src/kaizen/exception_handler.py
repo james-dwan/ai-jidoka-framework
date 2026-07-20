@@ -199,7 +199,7 @@ class ExceptionRecord:
     five_whys: Optional[FiveWhysAnalysis] = None
     ticket_id: Optional[str] = None
 
-    def to_ticket(self, bucket: str = "Exceptions") -> KanbanTicket:
+    def to_ticket(self, bucket: str = "Problems") -> KanbanTicket:
         five_whys = self.five_whys or FiveWhysAnalysis(problem=self.summary)
         description = "\n\n".join(
             part for part in [
@@ -239,7 +239,7 @@ class ExceptionHandler:
         runlog: Optional[RunLog] = None,
         stop_on_severity: Union[str, Severity] = Severity.HIGH,
         sandbox: bool = False,
-        exception_bucket: str = "Exceptions",
+        problem_bucket: str = "Problems",
         tickets_on_stop: bool = True,
     ):
         self.process_name = process_name
@@ -248,7 +248,7 @@ class ExceptionHandler:
         self.runlog = runlog
         self.stop_on_severity = Severity(stop_on_severity)
         self.sandbox = sandbox
-        self.exception_bucket = exception_bucket
+        self.problem_bucket = problem_bucket
         self.tickets_on_stop = tickets_on_stop
 
     # -- detection ---------------------------------------------------------
@@ -356,12 +356,12 @@ class ExceptionHandler:
                 )
                 record.ticket_id = existing.id
             else:
-                ticket = self.board.create_ticket(record.to_ticket(self.exception_bucket))
+                ticket = self.board.create_ticket(record.to_ticket(self.problem_bucket))
                 record.ticket_id = ticket.id
         return record
 
     def _open_ticket_for_rule(self, rule_name: str) -> Optional[KanbanTicket]:
-        for ticket in self.board.list_tickets(bucket=self.exception_bucket):
+        for ticket in self.board.list_tickets(bucket=self.problem_bucket):
             if ticket.status != "done" and rule_from_title(ticket.title) == rule_name:
                 return ticket
         return None
