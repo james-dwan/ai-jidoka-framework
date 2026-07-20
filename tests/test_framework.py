@@ -933,3 +933,47 @@ def test_dashboard_renders_report_markdown(tmp_path):
     assert "<strong>missing-reports</strong>" in out
     # Escaping still applies: markup in the report can't inject HTML.
     assert "<script>" not in _md_to_html("hello <script>alert(1)</script>")
+
+
+def test_teammate_replies_in_the_conversation(tmp_path):
+    """The card carries a dialogue: human note -> teammate reply, both
+    preserved across passes (Planner model: document + conversation)."""
+    config, board = _board_with_ticket(tmp_path)
+    llm = StubLLM([RESPONSE_WITH_QUESTION, RESPONSE_COMPLETE])
+    teammate = KaizenTeammate(config, board, runlog=RunLog(str(tmp_path / "log.jsonl")), llm=llm)
+    teammate.work_board()
+
+    ticket = board.list_tickets(bucket="Problems")[0]
+    assert "**Teammate (" not in ticket.description       # no reply before any note
+
+    board.update_ticket(ticket.id, description=ticket.description +
+                        "\n\n**Note (2026-07-20 10:00):** Feed switched to pre-scaled units.")
+    teammate.work_board()
+    desc = board.list_tickets(bucket="Problems")[0].description
+    note_pos = desc.find("**Note (2026-07-20 10:00):**")
+    reply_pos = desc.find("**Teammate (")
+    assert note_pos != -1 and reply_pos != -1
+    assert reply_pos > note_pos                            # reply follows the note
+    assert "ready for the owner's review" in desc          # ack reflects the state
+    # And the teammate's own reply never retriggers work.
+    assert teammate.work_board() == 0
+
+
+def test_board_presents_analysis_and_thread(tmp_path):
+    from kaizen.board_server import _present
+    from kaizen.kanban_integration import KanbanTicket
+
+    t = KanbanTicket(
+        title="x", bucket="Problems",
+        description=("**Process:** p\n\n---\n\n<!-- kaizen-teammate rev:abc -->\n\n"
+                     "**Problem:** something measurable\n\n"
+                     "- [ ] Question one?\n\n"
+                     "**Note (10:00):** we checked the source\n\n"
+                     "**Teammate (10:05):** thanks — updated the whys above."))
+    data = _present(t)
+    assert "kaizen-teammate" not in data["analysis_html"]          # marker hidden
+    assert "<strong>Problem:</strong>" in data["analysis_html"]    # rendered
+    assert 'type="checkbox"' in data["analysis_html"]              # checklist rendered
+    assert "we checked the source" not in data["analysis_html"]    # thread split out
+    assert [n["author"] for n in data["notes"]] == ["team", "teammate"]
+    assert data["notes"][1]["text"].startswith("thanks")

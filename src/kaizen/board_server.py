@@ -31,9 +31,36 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from .config import KaizenConfig
+from .dashboard import _md_to_html
 from .kanban_integration import KanbanBoard
 
 STATUSES = ["open", "in_progress", "done"]
+
+_CONVO_RE = re.compile(r"^\*\*(Note|Teammate) \(([^)]+)\):\*\*\s*(.*)", re.DOTALL)
+
+
+def _present(ticket) -> dict:
+    """Ticket dict + a structured read view: the analysis rendered as HTML
+    (agent markers hidden) and the conversation — human notes and teammate
+    replies, in order — split out as a thread. This mirrors Planner's model:
+    a task has notes (the document) and a conversation."""
+    data = ticket.to_dict()
+    paragraphs = ticket.description.split("\n\n")
+    thread = []
+    analysis_parts = []
+    for p in paragraphs:
+        if m := _CONVO_RE.match(p.strip()):
+            stamp = m.group(2)
+            name = ""
+            if " · " in stamp:                      # "2026-07-20 10:00 · priya"
+                stamp, name = stamp.split(" · ", 1)
+            thread.append({"author": "teammate" if m.group(1) == "Teammate" else "team",
+                           "name": name, "stamp": stamp, "text": m.group(3).strip()})
+        else:
+            analysis_parts.append(p)
+    data["analysis_html"] = _md_to_html("\n\n".join(analysis_parts))
+    data["notes"] = thread
+    return data
 
 
 def serve_board(
@@ -94,7 +121,7 @@ def make_server(config, board, host="127.0.0.1", port=8765) -> ThreadingHTTPServ
                     "sandbox": config.sandbox,
                     "statuses": STATUSES,
                     "buckets": list(config.kanban.get("buckets", {}).values()) or ["Problems"],
-                    "tickets": [t.to_dict() for t in board.list_tickets()],
+                    "tickets": [_present(t) for t in board.list_tickets()],
                 })
             else:
                 self._json({"error": "not found"}, 404)
@@ -115,7 +142,7 @@ def make_server(config, board, host="127.0.0.1", port=8765) -> ThreadingHTTPServ
                     labels=["human-raised"],
                     priority="low",
                 ))
-                self._json(ticket.to_dict())
+                self._json(_present(ticket))
                 return
             match = re.fullmatch(r"/api/tickets/([\w-]+)(/note)?", self.path)
             if not match:
@@ -128,9 +155,13 @@ def make_server(config, board, host="127.0.0.1", port=8765) -> ThreadingHTTPServ
                 return
             try:
                 if action == "/note":
-                    text = str(self._body().get("text", "")).strip()
+                    body = self._body()
+                    text = str(body.get("text", "")).strip()
+                    author = str(body.get("author", "")).strip()
                     if text:
                         stamp = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+                        if author:
+                            stamp = f"{stamp} · {author}"
                         board.update_ticket(
                             ticket_id,
                             description=ticket.description + f"\n\n**Note ({stamp}):** {text}",
@@ -143,7 +174,7 @@ def make_server(config, board, host="127.0.0.1", port=8765) -> ThreadingHTTPServ
                         return
                     if changes:
                         board.update_ticket(ticket_id, **changes)
-                self._json(self._ticket(ticket_id).to_dict())
+                self._json(_present(self._ticket(ticket_id)))
             except Exception as exc:  # surface errors to the UI, don't die
                 self._json({"error": str(exc)}, 500)
 
@@ -200,6 +231,24 @@ def _page(config: KaizenConfig) -> str:
   #modal { background:var(--surface); border-radius:12px; width:min(760px,100%);
            max-height:88vh; display:flex; flex-direction:column; padding:18px 20px; }
   #modal h3 { margin:0 0 10px; font-size:15px; padding-right:30px; }
+  #body { flex:1; overflow-y:auto; min-height:300px; max-height:56vh; }
+  #view { background:var(--page); border:1px solid var(--border); border-radius:8px;
+          padding:4px 16px 12px; font-size:13px; }
+  #view h3,#view h4,#view h5,#view h6 { font-size:13px; margin:12px 0 4px; }
+  #view p,#view li { color:var(--ink-2); margin:5px 0; }
+  #view ul,#view ol { padding-left:20px; margin:4px 0; }
+  #view li.task { list-style:none; margin-left:-16px; }
+  #view strong { color:var(--ink); }
+  #view code { background:var(--surface); border:1px solid var(--border);
+               border-radius:4px; padding:0 4px; font-size:12px; }
+  #view table { border-collapse:collapse; margin:6px 0; }
+  #view th,#view td { border:1px solid var(--border); padding:3px 8px; font-size:12px; }
+  #thread { margin-top:10px; }
+  .note-bubble { background:var(--surface); border:1px solid var(--border);
+                 border-radius:10px; padding:8px 12px; margin:6px 0 6px 24px;
+                 font-size:13px; color:var(--ink-2); }
+  .note-bubble.teammate { margin:6px 24px 6px 0; border-left:3px solid var(--accent); }
+  .note-who { font-size:11px; color:var(--muted); margin:6px 0 2px; }
   #desc { flex:1; min-height:300px; width:100%; resize:vertical; font:12px/1.5 ui-monospace,Menlo,monospace;
           background:var(--page); color:var(--ink); border:1px solid var(--border);
           border-radius:8px; padding:10px; }
@@ -218,7 +267,14 @@ def _page(config: KaizenConfig) -> str:
 </style>
 </head>
 <body>
-<h1>Kaizen board — """ + title + """</h1>
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+  <h1>Kaizen board — """ + title + """</h1>
+  <label style="font-size:12px;color:var(--ink-2)">You:
+    <input id="who" placeholder="your name"
+           style="font:13px system-ui;padding:4px 8px;border:1px solid var(--border);
+                  border-radius:8px;background:var(--surface);color:var(--ink);width:130px">
+  </label>
+</div>
 <div class="row" style="margin-bottom:14px">
   <input id="new-title" placeholder="Raise an idea or observation…"
          style="flex:1;min-width:260px;font:13px system-ui;padding:7px 10px;
@@ -233,14 +289,20 @@ def _page(config: KaizenConfig) -> str:
 <div id="overlay">
   <div id="modal">
     <div class="top"><h3 id="m-title"></h3><button id="close">✕</button></div>
-    <textarea id="desc" spellcheck="false"></textarea>
+    <div id="body">
+      <div id="view"></div>
+      <div id="thread"></div>
+    </div>
+    <textarea id="desc" spellcheck="false" style="display:none"></textarea>
     <div class="row">
-      <button class="primary" id="save">Save analysis</button>
+      <button id="edit">Edit analysis</button>
+      <button class="primary" id="save" style="display:none">Save</button>
+      <button id="cancel" style="display:none">Cancel</button>
       <span id="status-msg"></span>
     </div>
     <div class="row">
-      <input id="note" placeholder="Add a thought / observation…">
-      <button id="add-note">Add note</button>
+      <input id="note" placeholder="Reply to the team / agents — add a note…">
+      <button class="primary" id="add-note">Add note</button>
     </div>
   </div>
 </div>
@@ -255,6 +317,8 @@ async function api(path, opts) {
   return r.json();
 }
 
+let lastSnapshot = "";
+
 async function refresh() {
   const s = await api("/api/state");
   tickets = s.tickets;
@@ -267,10 +331,16 @@ async function refresh() {
       sel.appendChild(o);
     }
   }
-  render();
-  if (current) {
-    const t = tickets.find(t => t.id === current.id);
-    if (t) { current = t; fill(t); }
+  // Only touch the DOM when the board actually changed — a re-render swaps
+  // every node, and a click spanning that swap is silently lost.
+  const snapshot = JSON.stringify(s.tickets);
+  if (snapshot !== lastSnapshot) {
+    lastSnapshot = snapshot;
+    render();
+    if (current) {
+      const t = tickets.find(t => t.id === current.id);
+      if (t) { current = t; fill(t); }
+    }
   }
 }
 
@@ -286,7 +356,9 @@ function render() {
     lane.addEventListener("drop", async e => {
       e.preventDefault(); lane.classList.remove("drag");
       const id = e.dataTransfer.getData("text/plain");
-      await api(`/api/tickets/${id}`, {method:"POST", body:JSON.stringify({status})});
+      try {
+        await api(`/api/tickets/${id}`, {method:"POST", body:JSON.stringify({status})});
+      } catch (err) { msg(`Move failed: ${err.message}`, true); }
       refresh();
     });
     for (const t of tickets.filter(t => t.status === status)) {
@@ -306,24 +378,69 @@ function render() {
   }
 }
 
+let editing = false;
+
 function fill(t) {
   document.getElementById("m-title").textContent = t.title;
+  if (editing) return;                       // never clobber an edit in progress
   document.getElementById("desc").value = t.description;
+  document.getElementById("view").innerHTML = t.analysis_html || "";
+  const thread = document.getElementById("thread");
+  thread.innerHTML = "";
+  if ((t.notes || []).length)
+    thread.insertAdjacentHTML("beforeend", '<div class="note-who">Conversation</div>');
+  for (const note of t.notes || []) {
+    const bubble = document.createElement("div");
+    bubble.className = "note-bubble" + (note.author === "teammate" ? " teammate" : "");
+    const who = document.createElement("div");
+    who.className = "note-who";
+    who.textContent = (note.author === "teammate"
+        ? "🤖 Kaizen Teammate"
+        : `🧑 ${note.name || "Team"}`) + ` — ${note.stamp}`;
+    const text = document.createElement("div");
+    text.textContent = note.text;
+    bubble.append(who, text);
+    thread.appendChild(bubble);
+  }
 }
-function open(t) { current = t; fill(t); document.getElementById("overlay").classList.add("show"); }
-function msg(text) {
+
+function setEditing(on) {
+  editing = on;
+  document.getElementById("body").style.display = on ? "none" : "block";
+  document.getElementById("desc").style.display = on ? "block" : "none";
+  document.getElementById("edit").style.display = on ? "none" : "inline-block";
+  document.getElementById("save").style.display = on ? "inline-block" : "none";
+  document.getElementById("cancel").style.display = on ? "inline-block" : "none";
+}
+
+function open(t) { current = t; editing = false; setEditing(false); fill(t);
+                   document.getElementById("overlay").classList.add("show"); }
+function msg(text, isError) {
   const el = document.getElementById("status-msg");
-  el.textContent = text; setTimeout(() => el.textContent = "", 2500);
+  el.textContent = text;
+  el.style.color = isError ? "var(--critical)" : "";
+  setTimeout(() => { el.textContent = ""; el.style.color = ""; }, isError ? 6000 : 2500);
 }
+
+const who = document.getElementById("who");
+who.value = localStorage.getItem("kaizen-who") || "";
+who.addEventListener("change", () => localStorage.setItem("kaizen-who", who.value.trim()));
 
 document.getElementById("close").onclick = () => document.getElementById("overlay").classList.remove("show");
 document.getElementById("overlay").addEventListener("click", e => {
   if (e.target.id === "overlay") document.getElementById("overlay").classList.remove("show");
 });
+document.getElementById("edit").onclick = () => {
+  document.getElementById("desc").value = current.description;
+  setEditing(true);
+};
+document.getElementById("cancel").onclick = () => { setEditing(false); fill(current); };
 document.getElementById("save").onclick = async () => {
-  await api(`/api/tickets/${current.id}`, {method:"POST",
-    body: JSON.stringify({description: document.getElementById("desc").value})});
-  msg("Saved."); refresh();
+  try {
+    await api(`/api/tickets/${current.id}`, {method:"POST",
+      body: JSON.stringify({description: document.getElementById("desc").value})});
+    setEditing(false); msg("Saved."); refresh();
+  } catch (e) { msg(`NOT saved: ${e.message}`, true); }
 };
 document.getElementById("add-card").onclick = async () => {
   const input = document.getElementById("new-title");
@@ -334,10 +451,13 @@ document.getElementById("add-card").onclick = async () => {
 };
 document.getElementById("add-note").onclick = async () => {
   const note = document.getElementById("note");
-  if (!note.value.trim()) return;
-  await api(`/api/tickets/${current.id}/note`, {method:"POST",
-    body: JSON.stringify({text: note.value})});
-  note.value = ""; msg("Note added."); refresh();
+  if (!note.value.trim()) { msg("Type a note first.", true); return; }
+  try {
+    await api(`/api/tickets/${current.id}/note`, {method:"POST",
+      body: JSON.stringify({text: note.value, author: who.value.trim()})});
+    note.value = ""; msg("Note added — the teammate will pick it up on its next pass.");
+    refresh();
+  } catch (e) { msg(`Note NOT saved: ${e.message}`, true); }
 };
 
 refresh();

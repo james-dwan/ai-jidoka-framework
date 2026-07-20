@@ -48,7 +48,10 @@ def _with_pilot(analysis: FiveWhysAnalysis, pilot: str) -> FiveWhysAnalysis:
     )
 
 AGENT_MARKER = "<!-- kaizen-teammate"
-_NOTE_RE = re.compile(r"^\*\*Note \([^)]+\):\*\*", re.MULTILINE)
+#: Conversation entries: human notes and the teammate's own replies. Both are
+#: preserved verbatim across passes so the card carries its full dialogue.
+_NOTE_RE = re.compile(r"^\*\*Note \([^)]+\):\*\*")
+_CONVO_RE = re.compile(r"^\*\*(Note|Teammate) \([^)]+\):\*\*")
 
 
 class KaizenTeammate:
@@ -105,8 +108,9 @@ class KaizenTeammate:
     # ------------------------------------------------------------------
 
     def work_ticket(self, ticket: KanbanTicket) -> bool:
-        header, notes = _split_description(ticket.description)
-        rev = _rev(header, notes)
+        header, convo = _split_description(ticket.description)
+        notes = _human_notes(convo)
+        rev = _rev(header, convo)
         if f"rev:{rev}" in ticket.description:
             return False  # nothing new from the humans since the last pass
 
@@ -130,7 +134,7 @@ class KaizenTeammate:
                 complete = bool(analysis.root_cause and analysis.countermeasure and not questions)
                 review = self.sensei.review(_with_pilot(analysis, pilot)) if complete else None
 
-        description = self._compose(header, notes, analysis, pilot, questions, review, rev)
+        description = self._compose(header, convo, analysis, pilot, questions, review, rev)
         changes: Dict[str, Any] = {"description": description}
         if ticket.status == "open":
             changes["status"] = "in_progress"  # visible: the agent is on it
@@ -225,7 +229,7 @@ QUESTION: <question for the team — omit these lines entirely if you have none>
     # Composing the ticket back
     # ------------------------------------------------------------------
 
-    def _compose(self, header, notes, analysis, pilot, questions, review, rev) -> str:
+    def _compose(self, header, convo, analysis, pilot, questions, review, rev) -> str:
         parts = [header.rstrip(), "---", AGENT_MARKER + f" rev:{rev} -->", analysis.to_markdown()]
         if pilot:
             parts.append(f"**Pilot:** {pilot}")
@@ -239,9 +243,24 @@ QUESTION: <question for the team — omit these lines entirely if you have none>
                          "the result is verified. I will not close it myself.")
         elif review is not None and review.questions:
             parts.append("**Sensei still asks:**\n" + "\n".join(f"- {q}" for q in review.questions))
-        if notes:
-            parts.append("\n".join(notes))
+        # The conversation persists in order — and when responding to the team,
+        # the teammate replies IN the conversation, so its work reads as a
+        # dialogue, not a silent document edit.
+        parts.extend(convo)
+        if _human_notes(convo):
+            parts.append(f"**Teammate ({time.strftime('%H:%M')}):** "
+                         + self._ack(analysis, questions, review))
         return "\n\n".join(parts)
+
+    @staticmethod
+    def _ack(analysis, questions, review) -> str:
+        if review is not None and review.ready:
+            return ("Thanks — your notes closed the gaps. I've updated the analysis and the "
+                    "proposal above is ready for the owner's review.")
+        if questions:
+            return (f"Thanks — I've folded your notes into the analysis above. "
+                    f"I'm still stuck on {len(questions)} question(s) — see 'Needs from the team'.")
+        return "Thanks — I've updated the whys above based on your notes."
 
 
 # ----------------------------------------------------------------------
@@ -249,19 +268,26 @@ QUESTION: <question for the team — omit these lines entirely if you have none>
 # ----------------------------------------------------------------------
 
 def _split_description(description: str) -> Tuple[str, List[str]]:
-    """Header (immutable ticket context) + the humans' notes, discarding any
-    previous agent-authored sections (they are regenerated each pass)."""
-    notes = [p.strip() for p in description.split("\n\n") if _NOTE_RE.match(p.strip())]
+    """Header (immutable ticket context) + the conversation (human notes AND
+    prior teammate replies, in order). The agent's *analysis* section is
+    discarded — it's regenerated each pass — but the conversation persists."""
+    convo = [p.strip() for p in description.split("\n\n") if _CONVO_RE.match(p.strip())]
     if AGENT_MARKER in description:
         header = description.split("\n\n---\n\n" + AGENT_MARKER)[0]
         header = header.split("---\n\n" + AGENT_MARKER)[0]
     else:
         header = description.split("\n\n---\n\n")[0]
-    return header.strip(), notes
+    return header.strip(), convo
 
 
-def _rev(header: str, notes: List[str]) -> str:
-    digest = hashlib.sha1(("\n".join([header, *notes])).encode()).hexdigest()
+def _human_notes(convo: List[str]) -> List[str]:
+    return [p for p in convo if _NOTE_RE.match(p)]
+
+
+def _rev(header: str, convo: List[str]) -> str:
+    # Only HUMAN input counts as change — the teammate's own replies must
+    # never retrigger it.
+    digest = hashlib.sha1(("\n".join([header, *_human_notes(convo)])).encode()).hexdigest()
     return digest[:10]
 
 

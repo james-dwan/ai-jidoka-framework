@@ -156,10 +156,12 @@ def _inline_md(text: str) -> str:
 
 
 def _md_to_html(md: str) -> str:
-    """A tiny renderer for the subset of markdown the Kaizen reports contain —
-    headings, pipe tables, bullet/numbered lists, bold, code — keeping the
-    dashboard dependency-free. Headings are shifted down two levels so the
-    report nests under the dashboard's own section heading."""
+    """A tiny renderer for the subset of markdown the Kaizen reports and
+    tickets contain — headings, pipe tables, bullet/numbered lists, checkbox
+    items, bold, code — keeping everything dependency-free. Headings are
+    shifted down two levels to nest under the page's own headings. HTML
+    comments (agent bookkeeping markers) are hidden."""
+    md = re.sub(r"<!--.*?-->", "", md, flags=re.DOTALL)
     blocks: List[str] = []
     lines = md.splitlines()
     i = 0
@@ -184,6 +186,10 @@ def _md_to_html(md: str) -> str:
             table.append("</tbody></table>")
             blocks.append("".join(table))
             continue
+        if re.fullmatch(r"-{3,}", line.strip()):                   # horizontal rule
+            blocks.append("<hr>")
+            i += 1
+            continue
         if m := re.match(r"(#{1,4})\s+(.*)", line):                # heading, shifted +2
             level = min(len(m.group(1)) + 2, 6)
             blocks.append(f"<h{level}>{_inline_md(m.group(2))}</h{level}>")
@@ -194,16 +200,24 @@ def _md_to_html(md: str) -> str:
             pattern = r"\d+\.\s+" if ordered else r"[-*]\s+"
             items = []
             while i < len(lines) and re.match(pattern, lines[i].strip()):
-                items.append(f"<li>{_inline_md(re.sub(pattern, '', lines[i].strip(), count=1))}</li>")
+                text = re.sub(pattern, "", lines[i].strip(), count=1)
+                if m := re.match(r"\[( |x|X)\]\s*(.*)", text):   # checklist item
+                    checked = " checked" if m.group(1).strip() else ""
+                    items.append(f'<li class="task"><input type="checkbox" disabled{checked}> '
+                                 f"{_inline_md(m.group(2))}</li>")
+                else:
+                    items.append(f"<li>{_inline_md(text)}</li>")
                 i += 1
             tag = "ol" if ordered else "ul"
             blocks.append(f"<{tag}>{''.join(items)}</{tag}>")
             continue
         paragraph = []                                             # paragraph
         while i < len(lines) and lines[i].strip() and not re.match(r"(\||#{1,4}\s|[-*]\s|\d+\.\s)", lines[i].strip()):
-            paragraph.append(lines[i].strip())
+            paragraph.append(_inline_md(lines[i].strip()))
             i += 1
-        blocks.append(f"<p>{_inline_md(' '.join(paragraph))}</p>")
+        # Single newlines inside a paragraph are line breaks (Root cause /
+        # Countermeasure sit on adjacent lines and must not merge).
+        blocks.append(f"<p>{'<br>'.join(paragraph)}</p>")
     return "\n".join(blocks)
 
 
