@@ -3,6 +3,10 @@
 A complete, runnable example of the AI Kaizen Framework applied to a monthly
 invoicing process for a professional services firm.
 
+First time? The **[tutorial](../../docs/TUTORIAL.md)** walks setup (including
+the Claude API key) and every step below with expected output; **[DEMO.md](DEMO.md)**
+is the presenter's runbook with talking points.
+
 ## The process
 
 ```
