@@ -525,18 +525,35 @@ def test_teammate_continues_after_team_note_and_proposes(tmp_path):
 # -- Aggregation & improvement ideas ---------------------------------------
 
 
-def test_recurring_rule_aggregates_onto_one_card(tmp_path):
-    rules = [{"name": "too-big", "condition": "state.get('doubled', 0) > 5",
-              "severity": "low", "description": "Doubled value exceeded the limit"}]
-    config = make_config(tmp_path, rules=rules)
+def test_non_stop_defects_are_counted_not_carded(tmp_path):
+    # A low/medium defect below the stop threshold is recorded but never carded.
+    rules = [{"name": "small-defect", "condition": "state.get('doubled', 0) > 5",
+              "severity": "medium", "description": "A minor defect"}]
+    config = make_config(tmp_path, rules=rules, stop_on="high")
     graph = build(tmp_path, config)
-    for value in (10, 11, 12):          # three incidents of the same pattern
+    for value in (10, 11, 12):
+        graph.invoke({"value": value})
+
+    board = LocalKanbanBoard(config.data["kanban"]["board_path"])
+    assert board.list_tickets(bucket="Exceptions") == []   # no cards for defects
+    # But the defects ARE counted in the run log (source of SQDIP / Pareto).
+    exceptions = [e for e in RunLog(str(tmp_path / "log.jsonl")).events()
+                  if e["type"] == "exception" and e["rule"] == "small-defect"]
+    assert len(exceptions) == 3
+
+
+def test_stop_recurrences_aggregate_onto_one_card(tmp_path):
+    rules = [{"name": "too-big", "condition": "state.get('doubled', 0) > 5",
+              "severity": "high", "description": "Doubled value exceeded the limit"}]
+    config = make_config(tmp_path, rules=rules, stop_on="high")
+    graph = build(tmp_path, config)
+    for value in (10, 11, 12):          # three line-stops of the same pattern
         graph.invoke({"value": value})
 
     board = LocalKanbanBoard(config.data["kanban"]["board_path"])
     tickets = board.list_tickets(bucket="Exceptions")
-    assert len(tickets) == 1            # ONE card for the pattern, not three
-    assert tickets[0].description.count("**Occurrence (") == 2  # 2nd + 3rd appended
+    assert len(tickets) == 1            # ONE card for the stop pattern
+    assert tickets[0].description.count("**Occurrence (") == 2
 
 
 def test_reflection_raises_deduped_improvement_ideas(tmp_path):
@@ -581,3 +598,69 @@ def test_board_server_add_card(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+# -- Targets: a missed target raises a card ---------------------------------
+
+from kaizen import MeasureTarget  # noqa: E402
+import datetime as _dt  # noqa: E402
+
+
+def test_target_miss_problem_statement_matches_practice():
+    # Reproduces the standard practice verbatim: one card, framed as the gap.
+    t = MeasureTarget(
+        name="customer-complaints",
+        description="customer complaints",
+        rule="customer-complaint",
+        target=20,
+        direction="below",
+        volume_from="runs",
+        volume_unit="calls to the Acme helpdesk",
+    )
+    events = ([{"type": "run_started"} for _ in range(1000)]
+              + [{"type": "exception", "rule": "customer-complaint"} for _ in range(30)])
+    result = t.evaluate(events, "20 July", "acme-helpdesk")
+    assert result.missed
+    assert result.problem_statement() == (
+        "On 20 July, 30 out of 1000 calls to the Acme helpdesk had customer "
+        "complaints, against the target of <20."
+    )
+    # A day within target raises no problem.
+    ok = ([{"type": "run_started"} for _ in range(1000)]
+          + [{"type": "exception", "rule": "customer-complaint"} for _ in range(12)])
+    assert t.evaluate(ok, "21 July", "acme-helpdesk").missed is False
+
+
+def test_reflection_raises_one_card_per_missed_target(tmp_path):
+    rules = [{"name": "missing-report", "condition": "True", "severity": "low",
+              "description": "A delivery report is missing"}]
+    config = make_config(tmp_path, rules=rules)
+    config.data["targets"] = [{
+        "name": "report-completeness", "description": "a missing report",
+        "rule": "missing-report", "volume_from": "runs",
+        "volume_unit": "runs", "target": 1, "direction": "below",
+    }]
+    runlog = RunLog(str(tmp_path / "log.jsonl"))
+    builder = KaizenGraphBuilder(State, config, runlog=runlog)
+    builder.add_node("double", double)
+    builder.set_entry_point("double")
+    builder.set_finish_point("double")
+    graph = builder.compile()
+    graph.invoke({"value": 1})
+    graph.invoke({"value": 2})          # 2 missing-report defects across 2 runs
+
+    board = LocalKanbanBoard(config.data["kanban"]["board_path"])
+    assert board.list_tickets(bucket="Exceptions") == []   # defects not carded
+
+    agent = ReflectionAgent(config, runlog, board=board, reports_dir=str(tmp_path / "reports"))
+    day = _dt.datetime.now(_dt.timezone.utc).date()
+    agent.daily_reflection(day=day)
+
+    cards = [t for t in board.list_tickets(bucket="Exceptions") if "Target missed" in t.title]
+    assert len(cards) == 1
+    assert "out of 2 runs had a missing report, against the target of <1" in cards[0].description
+    assert "target-miss" in cards[0].labels
+    # Re-running the review does not duplicate the card.
+    agent.daily_reflection(day=day)
+    cards = [t for t in board.list_tickets(bucket="Exceptions") if "Target missed" in t.title]
+    assert len(cards) == 1

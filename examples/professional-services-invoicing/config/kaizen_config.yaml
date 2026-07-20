@@ -117,6 +117,22 @@ standard_work:
     - For invoices over the approval threshold, the engagement manager reviews
       line items against the statement of work before releasing the stop.
 
+# ---------------------------------------------------------------------------
+# Measure targets. Defects are counted, not carded one-by-one; a card is raised
+# at the daily review only when a target is MISSED, with a problem statement
+# framed as the gap to target (e.g. "On 20 July, 3 out of 3 invoicing runs had
+# a missing delivery report, against the target of <1"). The same mechanism
+# expresses a call-centre target like "customer complaints < 20 per day".
+# ---------------------------------------------------------------------------
+targets:
+  - name: delivery-report-completeness
+    description: a missing delivery report
+    rule: missing-delivery-reports
+    volume_from: runs
+    volume_unit: invoicing runs
+    target: 1
+    direction: below
+
 sqdip_targets:
   safety:
     description: Invoices raised without required human approval

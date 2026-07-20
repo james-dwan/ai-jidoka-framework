@@ -30,12 +30,13 @@ Read the full [white paper](docs/AI-Kaizen-Framework-White-Paper.md).
 
 | Lean concept | In the framework |
 |---|---|
-| **Jidoka** (stop on abnormality) | Business-editable rules watch every node; at high severity the graph routes to an `andon` node and stops before defects flow downstream |
-| **Make problems visible** | Every abnormality becomes a structured Kanban ticket with a 5 Whys scaffold and a countermeasure checklist |
+| **Jidoka** (stop on abnormality) | Business-editable rules watch every node; at high severity the graph routes to an `andon` node, stops before defects flow downstream, and raises one immediate card |
+| **Defects are counted, problems are chosen** | Every abnormality is recorded and counted in the run log (feeding SQDIP and the Pareto) but is **not** carded one-by-one — a call centre logs its 20-30 daily defects without 20-30 tickets |
+| **Targets generate the work** | At the daily review, a **missed target** raises one problem card with the gap as its problem statement: *"On 20 July, 30 out of 1000 calls had customer complaints, against the target of <20."* Targets are config, so the metrics the team already reviews are what create the cards |
 | **SQDIP** | Safety, Quality, Delivery, Inventory, Productivity computed daily from the run log, scored against your targets |
 | **Daily Kaizen kata** | A Reflection Agent prepares the daily summary and improvement suggestions; humans and AI review it together |
 | **FMEA** | A registry of anticipated failure modes, ranked by RPN, folded into the daily reflection |
-| **Kaizen Teammate** | An autonomous agent that works the shared board: one card per problem *pattern* (recurrences aggregate, "3 of 4 submissions missing"), fills in what the evidence supports, asks the team precise questions in the ticket when blocked, and picks up their answers on its next pass. It never closes tickets — humans hold the gates |
+| **Kaizen Teammate** | An autonomous agent that works the problem cards on the shared board: fills in what the evidence supports, asks the team precise questions in the ticket when blocked, and picks up their answers on its next pass. It never closes tickets — humans hold the gates |
 | **Sensei coaching** | A Sensei Agent reviews 5 Whys analyses socratically — questioning vague problem statements, blame-the-person causes, and weak countermeasures. It gates the AI teammate's own proposals before they're posted, not just the humans' |
 | **Improvement ideas** | A shared Ideas bucket: humans add cards from the board; the AI raises its own (deduped) suggestion cards from the daily reflection when it spots patterns |
 | **Investigations as flows** | Each exception ticket can spawn its own checkpointed LangGraph: problem framing → Pareto → fishbone → 5 Whys → Sensei gate → countermeasure → pilot → verify → standardize. Human gates at every stage are non-optional; a weak analysis stops the flow the way bad data stops production |

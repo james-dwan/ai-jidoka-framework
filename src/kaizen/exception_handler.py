@@ -240,6 +240,7 @@ class ExceptionHandler:
         stop_on_severity: Union[str, Severity] = Severity.HIGH,
         sandbox: bool = False,
         exception_bucket: str = "Exceptions",
+        tickets_on_stop: bool = True,
     ):
         self.process_name = process_name
         self.rules = rules or []
@@ -248,6 +249,7 @@ class ExceptionHandler:
         self.stop_on_severity = Severity(stop_on_severity)
         self.sandbox = sandbox
         self.exception_bucket = exception_bucket
+        self.tickets_on_stop = tickets_on_stop
 
     # -- detection ---------------------------------------------------------
 
@@ -335,10 +337,15 @@ class ExceptionHandler:
                 summary=summary,
                 sandbox=self.sandbox,
             )
-        if self.board and not self.sandbox:
-            # One card per problem PATTERN, not per event: recurrences of the
-            # same rule append to the existing open ticket so the daily review
-            # sees "3 occurrences of X" on a single card, never three cards.
+        # Defects are counted (run log), not auto-carded. A card is raised only
+        # when this abnormality STOPS the line — a genuine andon event that
+        # halts the process and needs action now. Everything below the stop
+        # threshold is just counted; the daily review turns missed *targets*
+        # into problem cards (see ReflectionAgent.raise_target_miss_cards).
+        stops_the_line = severity.rank >= self.stop_on_severity.rank
+        if self.board and not self.sandbox and self.tickets_on_stop and stops_the_line:
+            # One card per stop PATTERN: recurrences of the same rule append to
+            # the existing open card rather than creating duplicates.
             existing = self._open_ticket_for_rule(rule_name)
             if existing is not None:
                 stamp = record.timestamp[:16].replace("T", " ")

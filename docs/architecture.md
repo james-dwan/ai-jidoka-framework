@@ -52,7 +52,8 @@ flowchart TB
 |---|---|---|
 | `KaizenGraphBuilder` | `kaizen_graph.py` | Wraps `StateGraph`; instruments every node with abnormality detection, error capture, and a Jidoka gate that diverts to the `andon` node on a stop |
 | `KaizenState` | `kaizen_graph.py` | TypedDict mixin adding `kaizen_run_id`, `kaizen_stopped`, `kaizen_stop_reason`, `kaizen_exceptions` |
-| `ExceptionHandler` / `AbnormalityRule` | `exception_handler.py` | Evaluates config-defined rules after each node; produces `ExceptionRecord`s with a 5 Whys scaffold; decides stops by severity |
+| `ExceptionHandler` / `AbnormalityRule` | `exception_handler.py` | Evaluates config-defined rules after each node; records every defect to the run log; decides stops by severity and cards only on a stop |
+| `MeasureTarget` / `TargetResult` | `targets.py` | A measure with a target; a missed target produces a problem card whose statement is the gap to target |
 | `FMEARegistry` / `FMEAEntry` | `exception_handler.py` | Anticipated failure modes ranked by RPN, folded into daily reflections |
 | `KanbanBoard` + providers | `kanban_integration.py` | `LocalKanbanBoard` (JSON), `PlannerKanbanBoard`, `ListsKanbanBoard` (Microsoft Graph); implement the ABC for anything else |
 | `ReflectionAgent` | `reflection_agent.py` | Computes the SQDIP snapshot from the run log, writes the daily Kaizen summary (optionally LLM-narrated), posts it to the board |
@@ -65,14 +66,20 @@ flowchart TB
 
 1. **Process runs.** `graph.invoke()` brackets the run with `run_started` /
    `run_completed` events; each node completion is logged.
-2. **Exceptions trigger Jidoka.** After each node, rules are evaluated against
-   the merged state. Abnormalities become run-log events and Kanban tickets;
-   at or above `jidoka.stop_on_severity`, the flow routes to the `andon` node
-   and the run records `run_stopped`.
-3. **Daily reflection runs.** The Reflection Agent computes SQDIP from the run
-   log (Inventory comes from open ticket count on the board), summarizes
-   exception patterns, adds FMEA top risks, and posts the summary to the
-   "Daily Kaizen" bucket.
+2. **Defects are recorded and counted.** After each node, rules are evaluated
+   against the merged state. Every abnormality is written to the run log (this
+   is the defect count that feeds SQDIP and the Pareto) but is **not** carded
+   on its own. At or above `jidoka.stop_on_severity` the flow routes to the
+   `andon` node, records `run_stopped`, and — a genuine andon event — raises one
+   immediate card (recurrences aggregate onto it).
+3. **Daily reflection runs, and missed targets become cards.** The Reflection
+   Agent computes SQDIP from the run log, summarizes patterns, adds FMEA top
+   risks, and posts the summary to the "Daily Kaizen" bucket. It then compares
+   each measure against its target (`targets` in the config, plus SQDIP metrics
+   if enabled) and raises **one problem card per missed target**, with a
+   problem statement framed as the gap: *"On 20 July, 30 out of 1000 calls had
+   customer complaints, against the target of <20."* Deduplicated per
+   target+period.
 4. **Joint Kaizen kata improves the system.** Humans and AI review the summary,
    run a 5 Whys on one pattern, and standardize the countermeasure — usually
    as an edit to `kaizen_config.yaml`, trialed first in sandbox mode.

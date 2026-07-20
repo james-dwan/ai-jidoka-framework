@@ -26,6 +26,16 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         # Stop the line when an exception at or above this severity occurs.
         "stop_on_severity": "high",
     },
+    # Individual defects are always recorded to the run log and counted; they
+    # are NOT auto-carded. Cards come from two places: a Jidoka line-stop
+    # (immediate andon), and a missed target at the daily review (see targets).
+    "tickets": {
+        "on_stop": True,               # a line-stop raises an immediate card
+        "cards_for_sqdip_misses": False,  # also card when an SQDIP metric misses target
+    },
+    # Measure targets. A missed target raises ONE card at the daily review with
+    # a problem statement framed as the gap to target. See src/kaizen/targets.py.
+    "targets": [],
     "rules": [],
     "prompts": {
         "daily_reflection": (
@@ -127,6 +137,14 @@ class KaizenConfig:
     @property
     def stop_on_severity(self) -> str:
         return self.data.get("jidoka", {}).get("stop_on_severity", "high")
+
+    @property
+    def tickets(self) -> Dict[str, Any]:
+        return self.data.get("tickets", {})
+
+    @property
+    def targets(self) -> List[Dict[str, Any]]:
+        return self.data.get("targets", [])
 
     @property
     def rules(self) -> List[Dict[str, Any]]:

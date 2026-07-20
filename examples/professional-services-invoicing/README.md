@@ -14,11 +14,24 @@ abnormality rules defined in [`config/kaizen_config.yaml`](config/kaizen_config.
 
 | Rule | Severity | What happens |
 |---|---|---|
-| `missing-delivery-reports` | medium | Ticket created, run continues |
-| `negative-or-zero-hours` | medium | Invalid reports excluded + ticketed, run continues |
-| `missing-rate-card` | high | **Jidoka stop** — hours would go unbilled |
-| `invoice-over-approval-threshold` | high | **Jidoka stop** — human approval required |
-| `low-utilisation-warning` | low | Logged for the daily reflection |
+| `missing-delivery-reports` | medium | **Counted** in the run log; not carded on its own |
+| `negative-or-zero-hours` | medium | Invalid reports excluded; **counted**, not carded |
+| `missing-rate-card` | high | **Jidoka stop** → immediate card; hours would go unbilled |
+| `invoice-over-approval-threshold` | high | **Jidoka stop** → immediate card; human approval required |
+| `low-utilisation-warning` | low | Counted for the daily reflection |
+
+**Defects are counted, not carded one-by-one.** A card appears in two cases: a
+**Jidoka line-stop** (an immediate andon — the run halted and needs action
+now), and a **missed target** at the daily review. The config sets one target —
+`delivery-report-completeness` (target: `<1` missing report) — so after a few
+runs the review raises a single problem card:
+
+> On 20 July, 3 out of 3 invoicing runs had a missing delivery report, against
+> the target of <1.
+
+That's the Lean model: a call centre with thousands of calls records its 20-30
+daily defects but only writes a card when a target (say, complaints < 20/day)
+is missed. The same `targets:` config expresses either.
 
 The bundled sample data deliberately contains problems: one consultant hasn't
 submitted a report, one report has negative hours, and one engagement has no
@@ -32,7 +45,8 @@ From the repository root:
 pip install -e .
 cd examples/professional-services-invoicing
 
-# 1. Run the invoicing workflow — exceptions become tickets, the line stops
+# 1. Run the invoicing workflow — defects are counted, the line stops on
+#    the high-severity ones (run it 2-3 times to build up defect counts)
 python invoicing_workflow.py
 
 # 2. Generate the daily Kaizen summary (SQDIP + reflection + kata agenda)

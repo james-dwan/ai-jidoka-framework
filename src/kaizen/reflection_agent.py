@@ -23,6 +23,7 @@ from .config import KaizenConfig
 from .exception_handler import FMEARegistry
 from .kanban_integration import KanbanBoard, KanbanTicket
 from .runlog import RunLog
+from .targets import SQDIP_DIRECTION, MeasureTarget, TargetResult
 
 # Default model for the LLM-written narrative (requires `pip install ai-kaizen-framework[llm]`).
 DEFAULT_MODEL = "claude-opus-4-8"
@@ -170,10 +171,74 @@ class ReflectionAgent:
                 labels=["kaizen"],
             ))
             summary.ticket_id = ticket.id
+            self.raise_target_miss_cards(day, sqdip)
             self.raise_improvement_ideas(sqdip)
 
         self.runlog.record("daily_reflection", day=day.isoformat(), report=str(report_path))
         return summary
+
+    # -- target-miss cards --------------------------------------------------
+
+    def raise_target_miss_cards(self, day: _dt.date,
+                                sqdip: Optional[SQDIPSnapshot] = None) -> List[KanbanTicket]:
+        """Raise ONE problem card per missed target, framed as the gap to target.
+
+        Defects themselves are only counted; this is where the daily review
+        turns a missed target into a problem worth solving. Deduplicated per
+        target+period so re-running the review never duplicates a card.
+        """
+        if self.board is None or self.config.sandbox:
+            return []
+        sqdip = sqdip or self.compute_sqdip(day)
+        events = self.runlog.events(day=day)
+        period_label = f"{day.day} {day.strftime('%B')}"
+        bucket = self.config.kanban.get("buckets", {}).get("exceptions", "Exceptions")
+
+        results: List[TargetResult] = [
+            MeasureTarget.from_dict(t).evaluate(events, period_label, self.config.process_name)
+            for t in self.config.targets
+        ]
+        if self.config.tickets.get("cards_for_sqdip_misses", False):
+            results.extend(self._sqdip_target_results(sqdip, period_label))
+
+        existing = [t.description for t in self.board.list_tickets(bucket=bucket)]
+        raised = []
+        for result in results:
+            if not result.missed:
+                continue
+            if any(result.marker in desc for desc in existing):
+                continue  # already carded this target for this period
+            ticket = self.board.create_ticket(result.to_ticket(bucket))
+            raised.append(ticket)
+            self.runlog.record("target_miss_card", ticket_id=ticket.id, target=result.name,
+                               actual=result.actual, target_value=result.target)
+        return raised
+
+    def _sqdip_target_results(self, sqdip: SQDIPSnapshot, period_label: str) -> List[TargetResult]:
+        actuals = {
+            "safety": (sqdip.safety_incidents, ""),
+            "quality": (sqdip.quality_exception_rate, "%"),
+            "delivery": (sqdip.delivery_completion_rate, "%"),
+            "inventory": (sqdip.inventory_open_tickets, ""),
+            "productivity": (sqdip.productivity_runs_completed, ""),
+        }
+        results = []
+        for metric, (actual, unit) in actuals.items():
+            spec = self.config.sqdip_targets.get(metric, {})
+            target = spec.get("target")
+            if target is None or actual is None:
+                continue
+            results.append(TargetResult(
+                name=f"SQDIP {metric}",
+                actual=actual,
+                target=target,
+                direction=SQDIP_DIRECTION.get(metric, "below"),
+                period_label=period_label,
+                process=self.config.process_name,
+                description=f"the {metric} measure ({spec.get('description', metric)})",
+                unit=unit,
+            ))
+        return results
 
     # -- improvement ideas --------------------------------------------------
 

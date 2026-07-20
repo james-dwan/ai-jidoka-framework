@@ -24,13 +24,15 @@ python invoicing_workflow.py
 
 **What happens:** the monthly invoicing run hits deliberately faulty data — a
 consultant who never submitted a report, a negative-hours timesheet, an
-engagement with no rate card. Two medium exceptions become tickets and the run
-*continues*; the missing rate card is high severity and **stops the line**
-before a bad invoice is raised.
+engagement with no rate card. The two medium defects are **counted** and the
+run *continues*; the missing rate card is high severity and **stops the line**
+before a bad invoice is raised, raising one immediate card. Run it 2-3 times to
+build up the defect counts.
 
 **Say:** "Nothing here asked a human for permission to stop. The process
-detected its own abnormality, made it visible as tickets, and refused to pass
-a defect downstream. That's Jidoka."
+detected its own abnormality and refused to pass a defect downstream — that's
+Jidoka. Notice the medium defects are counted, not turned into tickets: we
+don't want a board full of raw defects, we want to *know how many* there were."
 
 Optional beat: `python invoicing_workflow.py --sandbox` — same stops, no
 tickets, no side effects. "This is how the team trials rule changes safely."
@@ -47,8 +49,10 @@ the standup agenda.
 
 **Point at:** the SQDIP table (red across the board — and the narrative
 correctly says Delivery failure is the root symptom, not five separate
-problems); the closing question to the team. "The AI doesn't decide — it
-prepares the conversation."
+problems); the closing question to the team; and the **target-miss card** the
+review raised — *"On {date}, 3 out of 3 invoicing runs had a missing delivery
+report, against the target of <1."* "The AI doesn't decide — it prepares the
+conversation, and it writes a card only where a target was actually missed."
 
 ## Act 3 — The investigation: an A3 as a flow (~5 min)
 
