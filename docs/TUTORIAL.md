@@ -306,16 +306,19 @@ dependencies — attach it to an email if you like.
 
 ---
 
-## Resetting between runs
+## Resetting your data
 
-Everything the demo writes is git-ignored working state. One line restores a
-clean slate:
+Everything the demo writes — the board, run log, reports, dashboard, proposals
+— is git-ignored working state, kept in the example folder. To wipe it and
+start fresh (end of a session, between rehearsals, or after experimenting):
 
 ```bash
-rm -f kaizen_board.json kaizen_runlog.jsonl kaizen_dashboard.html \
-      kaizen_proposals.json kaizen_config.work.yaml
-rm -rf kaizen_reports config_history
+python reset_demo.py
 ```
+
+It prints exactly what it removed and never touches the committed sample data,
+config, or code. (If the board server or an investigation is still running,
+`Ctrl-C` it first.)
 
 ## Troubleshooting
 

@@ -75,6 +75,10 @@ python propose_change.py
 #    its next pass. You drag verified work to Done — it never closes tickets.
 python serve_board.py --llm
 
+# 7. Done, or want a fresh start? Wipe the demo's working data (board, run
+#    log, reports, proposals) — committed files are never touched:
+python reset_demo.py
+
 # Optional: have Claude write the reflection narrative and draft fishbones
 pip install '.[llm]'
 cp ../../.env.example ../../.env    # put your ANTHROPIC_API_KEY in .env (git-ignored)

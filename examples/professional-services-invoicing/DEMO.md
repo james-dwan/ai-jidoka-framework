@@ -8,10 +8,10 @@ cd examples/professional-services-invoicing
 source ../../.venv/bin/activate        # or your own venv with `pip install -e '..[llm]'`
 ```
 
-To reset between rehearsals:
+To reset between rehearsals (or after the demo):
 
 ```bash
-rm -f kaizen_board.json kaizen_runlog.jsonl kaizen_dashboard.html && rm -rf kaizen_reports
+python reset_demo.py
 ```
 
 ---
@@ -149,5 +149,5 @@ system daily — that loop, not the automation, is the product."
   deterministic summaries with a visible note. The demo cannot crash on auth.
 - **Weird LLM output:** re-run the command; or drop `--llm` and narrate the
   deterministic version (it makes the same structural points).
-- **Muscle-memory reset:** the `rm` line at the top restores a clean state in
+- **Muscle-memory reset:** `python reset_demo.py` restores a clean state in
   one second.
