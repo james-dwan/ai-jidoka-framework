@@ -112,6 +112,23 @@ Teammate runs in the background**, working the board autonomously:
 Locally this is a JSON file; against Microsoft Planner the agents behave
 identically — they just read and write tickets."
 
+## Optional act — closing the loop: change the standard work (~2 min)
+
+```bash
+python propose_change.py
+```
+
+**What happens:** an **agent** proposes a change to its *own* standard work
+(lower the Jidoka stop threshold), pilots it as a what-if against the recorded
+run log — *"the current standard produced 6 line-stops; the proposed one would
+produce 12"* — then tries to approve itself and is **blocked**. Only the
+**process owner** can approve, which updates the standard work and versions it.
+
+**Say:** "This is the whole point of Kaizen — the standard itself improves. The
+AI can propose changes to its own prompts and rules and show the evidence, but
+it can never standardize a change to itself. A named process owner holds that
+gate. And every approval is versioned, so any change rolls back."
+
 ## Act 4 — The dashboard (~1 min)
 
 ```bash

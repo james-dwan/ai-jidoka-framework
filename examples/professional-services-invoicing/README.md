@@ -60,7 +60,12 @@ python run_investigation.py
 #    the Kanban board, and the latest daily report) — opens in your browser
 python make_dashboard.py
 
-# 5. Serve the live board with the autonomous Kaizen Teammate working it:
+# 5. Close the loop: an agent proposes a change to its own standard work,
+#    pilots it as a what-if against the run log, and the process owner
+#    approves — versioning the standard. Agents propose+pilot; owners approve.
+python propose_change.py
+
+# 6. Serve the live board with the autonomous Kaizen Teammate working it:
 #    it advances every exception card as far as the evidence allows, asks
 #    the team precise questions in the ticket, and picks up your notes on
 #    its next pass. You drag verified work to Done — it never closes tickets.

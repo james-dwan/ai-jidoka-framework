@@ -223,3 +223,5 @@ kaizen_runlog.jsonl
 kaizen_reports/
 config_history/
 kaizen_dashboard.html
+kaizen_config.work.yaml
+kaizen_proposals.json

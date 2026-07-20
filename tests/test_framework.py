@@ -664,3 +664,110 @@ def test_reflection_raises_one_card_per_missed_target(tmp_path):
     agent.daily_reflection(day=day)
     cards = [t for t in board.list_tickets(bucket="Problems") if "Target missed" in t.title]
     assert len(cards) == 1
+
+
+# -- Standard-work change proposals (closing the loop) ---------------------
+
+from kaizen import ChangeProposal, ProposalRegistry  # noqa: E402
+
+
+def _piloted_config(tmp_path, stop_on="high"):
+    # Build a config saved to a real file (so approve() can version it) plus a
+    # run log with recorded defects to replay.
+    path = tmp_path / "config.yaml"
+    config = KaizenConfig.default()
+    config.data["process"]["name"] = "test-process"
+    config.data["process_owner"] = "owner.person"
+    config.data["kanban"]["board_path"] = str(tmp_path / "board.json")
+    config.data["jidoka"]["stop_on_severity"] = stop_on
+    config.data["rules"] = [
+        {"name": "big", "condition": "state.get('doubled',0) > 5", "severity": "high",
+         "description": "Big"},
+        {"name": "small", "condition": "True", "severity": "medium", "description": "Small"},
+    ]
+    config.save(str(path))
+    runlog = RunLog(str(tmp_path / "log.jsonl"))
+    builder = KaizenGraphBuilder(State, config, runlog=runlog)
+    builder.add_node("double", double)
+    builder.set_entry_point("double")
+    builder.set_finish_point("double")
+    graph = builder.compile()
+    for v in (10, 11):
+        graph.invoke({"value": v})   # each run: one 'big' (stop) + one 'small'
+    return config, runlog
+
+
+def test_agent_proposes_pilots_owner_approves_and_versions(tmp_path):
+    config, runlog = _piloted_config(tmp_path, stop_on="high")
+    version_before = config.data["version"]
+    registry = ProposalRegistry(config, runlog=runlog, path=str(tmp_path / "proposals.json"))
+
+    # An agent proposes changing its OWN standard work: lower the stop threshold.
+    p = registry.propose(
+        title="Lower the stop threshold to medium",
+        path=["jidoka", "stop_on_severity"], new_value="medium",
+        rationale="Medium defects are recurring; catch them at the line.",
+        proposed_by="agent:teammate",
+    )
+    assert p.register == "agent"
+
+    # Pilot replays the log: under 'high' only 'big' stops (2); under 'medium'
+    # both 'big' and 'small' stop (4).
+    p = registry.pilot(p.id)
+    assert p.pilot["metric_based"] is True
+    assert p.pilot["before"]["line_stops"] == 2
+    assert p.pilot["after"]["line_stops"] == 4
+
+    # An agent CANNOT approve.
+    with pytest.raises(PermissionError):
+        registry.approve(p.id, owner="agent:teammate")
+    # A non-owner cannot approve.
+    with pytest.raises(PermissionError):
+        registry.approve(p.id, owner="someone.else")
+
+    # The process owner approves → config is updated AND versioned.
+    p = registry.approve(p.id, owner="owner.person")
+    assert p.status == "approved"
+    assert p.approver == "owner.person"
+    assert config.data["jidoka"]["stop_on_severity"] == "medium"   # standard work changed
+    assert config.data["version"] == version_before + 1            # versioned
+    assert list((tmp_path / "config_history").glob("*.yaml"))       # previous archived
+
+
+def test_reject_leaves_standard_work_untouched(tmp_path):
+    config, runlog = _piloted_config(tmp_path)
+    registry = ProposalRegistry(config, runlog=runlog, path=str(tmp_path / "proposals.json"))
+    p = registry.propose(title="x", path=["jidoka", "stop_on_severity"], new_value="low")
+    registry.reject(p.id, owner="owner.person", reason="Too many stops would halt throughput.")
+    assert config.data["jidoka"]["stop_on_severity"] == "high"     # unchanged
+    assert registry.get(p.id).status == "rejected"
+
+
+def test_proposal_targets_human_standard_work(tmp_path):
+    config, runlog = _piloted_config(tmp_path)
+    registry = ProposalRegistry(config, runlog=runlog, path=str(tmp_path / "proposals.json"))
+    new_kata = list(config.data["standard_work"]["daily_kata"]) + ["Thank someone by name."]
+    p = registry.propose(
+        title="Add gratitude step to the kata",
+        path=["standard_work", "daily_kata"], new_value=new_kata,
+        proposed_by="human:sam",
+    )
+    assert p.register == "human"
+    piloted = registry.pilot(p.id)
+    assert piloted.pilot["metric_based"] is False   # text change, reviewed directly
+    registry.approve(p.id, owner="owner.person")
+    assert "Thank someone by name." in config.data["standard_work"]["daily_kata"]
+
+
+def test_pilot_target_change_replays_the_log(tmp_path):
+    config, runlog = _piloted_config(tmp_path)
+    config.data["targets"] = [{"name": "smalls", "description": "a small defect",
+                               "rule": "small", "volume_from": "runs", "volume_unit": "runs",
+                               "target": 1, "direction": "below"}]
+    registry = ProposalRegistry(config, runlog=runlog, path=str(tmp_path / "proposals.json"))
+    # 2 'small' defects over 2 runs: misses <1, would meet <3.
+    p = registry.propose(title="Loosen smalls target",
+                         path=["targets", {"name": "smalls"}, "target"], new_value=3)
+    p = registry.pilot(p.id)
+    assert p.pilot["before"]["missed"] is True
+    assert p.pilot["after"]["missed"] is False

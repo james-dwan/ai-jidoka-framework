@@ -39,6 +39,7 @@ from .reflection_agent import (
 from .sensei_agent import SenseiAgent, SenseiReview
 from .teammate import KaizenTeammate
 from .targets import MeasureTarget, TargetResult
+from .proposals import ChangeProposal, ProposalRegistry
 from .dashboard import generate_dashboard
 
 __version__ = "0.1.0"
@@ -70,6 +71,8 @@ __all__ = [
     "KaizenTeammate",
     "MeasureTarget",
     "TargetResult",
+    "ChangeProposal",
+    "ProposalRegistry",
     "generate_dashboard",
     "KaizenGraphBuilder",
     "KaizenState",

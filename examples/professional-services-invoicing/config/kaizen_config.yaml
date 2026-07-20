@@ -7,6 +7,10 @@
 
 version: 1
 
+# The process owner is the only role that may approve a change to standard
+# work. Agents (and humans) propose and pilot; the owner standardizes.
+process_owner: priya.nair
+
 process:
   name: professional-services-invoicing
   description: >

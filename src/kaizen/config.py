@@ -21,6 +21,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "name": "unnamed-process",
         "description": "",
     },
+    # The process owner: the only role that may approve a change to standard
+    # work. Agents can propose and pilot changes; only the owner standardizes
+    # them. On Microsoft Planner this maps to task assignment + completion.
+    "process_owner": "",
     "sandbox": False,
     "jidoka": {
         # Stop the line when an exception at or above this severity occurs.
@@ -133,6 +137,10 @@ class KaizenConfig:
     @property
     def sandbox(self) -> bool:
         return bool(self.data.get("sandbox", False))
+
+    @property
+    def process_owner(self) -> str:
+        return self.data.get("process_owner", "")
 
     @property
     def stop_on_severity(self) -> str:

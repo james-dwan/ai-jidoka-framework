@@ -41,6 +41,7 @@ Read the full [white paper](docs/AI-Kaizen-Framework-White-Paper.md).
 | **Improvement ideas** | A shared Ideas bucket: humans add cards from the board; the AI raises its own (deduped) suggestion cards from the daily reflection when it spots patterns |
 | **Investigations as flows** | Each exception ticket can spawn its own checkpointed LangGraph: problem framing → Pareto → fishbone → 5 Whys → Sensei gate → countermeasure → pilot → verify → standardize. Human gates at every stage are non-optional; a weak analysis stops the flow the way bad data stops production |
 | **Standard work as a living agreement** | One versioned YAML file holds rules, prompts, targets, *and* human standard work — editable without code changes, archived on every save |
+| **Change proposals with owner approval** | Humans *and* agents propose changes to either register (agent standard work — prompts, rules, thresholds; or human standard work — the kata). A change is piloted as a what-if against the recorded run log, then **only the process owner can approve** and standardize it. Agents propose and pilot; they can never self-modify without a human owner's sign-off |
 | **Safe experimentation** | Sandbox mode logs everything but creates no tickets and takes no external actions; config versioning makes every change reversible |
 
 ## Quick start
@@ -161,6 +162,34 @@ sensei = SenseiAgent(config)                    # add llm=... for richer questio
 sensei.coach_open_exceptions(create_board(config.kanban))
 # Every open exception ticket now carries socratic questions about its 5 Whys.
 ```
+
+## Closing the loop: proposing changes to standard work
+
+The config is the single **standard-work register** — agent standard work
+(prompts, rules, thresholds, targets) and human standard work (the daily kata)
+in one versioned file. Either humans or agents can propose changes; a change is
+piloted, then a **process owner** approves it. Agents propose and pilot; only
+the owner standardizes.
+
+```python
+from kaizen import KaizenConfig, ProposalRegistry, RunLog, create_board
+
+config = KaizenConfig.load("config/kaizen_config.yaml")
+registry = ProposalRegistry(config, runlog=RunLog(), board=create_board(config.kanban))
+
+# An agent proposes a change to its OWN standard work
+p = registry.propose(
+    title="Lower the stop threshold to medium",
+    path=["jidoka", "stop_on_severity"], new_value="medium",
+    rationale="Medium defects recur; catch them at the line.",
+    proposed_by="agent:teammate",
+)
+registry.pilot(p.id)                       # what-if replay of the recorded run log
+# registry.approve(p.id, owner="agent:teammate")   # -> PermissionError: agents can't approve
+registry.approve(p.id, owner=config.process_owner)  # owner standardizes; config versioned
+```
+
+See it run: `examples/professional-services-invoicing/propose_change.py`.
 
 ## Investigations as flows
 
