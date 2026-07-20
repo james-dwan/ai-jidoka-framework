@@ -1,4 +1,4 @@
-"""Smoke tests for the AI Jidoka Framework core loop."""
+"""Smoke tests for the AI Kaizen Framework core loop."""
 
 from __future__ import annotations
 

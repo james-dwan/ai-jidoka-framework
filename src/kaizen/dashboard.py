@@ -261,7 +261,7 @@ def _render(config, day, sqdip, pareto, tickets_by_bucket, latest_report) -> str
   </section>
 
 {report_section}
-  <p class="empty">AI Jidoka Framework — generated {_dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}</p>
+  <p class="empty">AI Kaizen Framework — generated {_dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}</p>
 </main>
 </body>
 </html>

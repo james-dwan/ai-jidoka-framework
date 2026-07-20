@@ -1,11 +1,11 @@
-# AI Jidoka Framework - Build Prompt for Claude Code
+# AI Kaizen Framework - Build Prompt for Claude Code
 
 You are an expert LangGraph developer and Lean practitioner with deep knowledge of human-AI collaboration.
 
-Build the complete open-source **AI Jidoka Framework** — a framework for embedding daily human-AI collaborative Kaizen into LangGraph agentic systems.
+Build the complete open-source **AI Kaizen Framework** — a framework for embedding daily human-AI collaborative Kaizen into LangGraph agentic systems.
 
 **Philosophy** (use this exactly and emphasize it):
-AI Jidoka is the practice of intelligent human-machine partnership — where AI and humans work together with shared awareness, perform daily improvement katas, conduct root cause analysis, and continuously evolve both the automated process and human standard work. The focus is on true collaboration, not automation with occasional human oversight.
+AI Kaizen is the practice of intelligent human-machine partnership — where AI and humans work together with shared awareness, perform daily improvement katas, conduct root cause analysis, and continuously evolve both the automated process and human standard work. The focus is on true collaboration, not automation with occasional human oversight.
 
 **Requirements**:
 - Integrate Jidoka (stop on abnormality, make problems visible), Daily Kaizen katas, SQDIP metrics (Safety, Quality, Delivery, Inventory, Productivity), 5 Whys root cause analysis, and FMEA thinking.
@@ -17,7 +17,7 @@ AI Jidoka is the practice of intelligent human-machine partnership — where AI 
 
 **Deliverables** (generate full file contents with clear paths):
 1. `README.md` — professional, with attribution to James Dwan, Catalyst Consulting.
-2. `docs/AI-Jidoka-Framework-White-Paper.md` — use the full polished white paper content.
+2. `docs/AI-Kaizen-Framework-White-Paper.md` — use the full polished white paper content.
 3. Core code in `src/kaizen/`:
    - `__init__.py`
    - `kaizen_graph.py`

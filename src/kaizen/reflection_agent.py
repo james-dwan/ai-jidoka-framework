@@ -24,7 +24,7 @@ from .exception_handler import FMEARegistry
 from .kanban_integration import KanbanBoard, KanbanTicket
 from .runlog import RunLog
 
-# Default model for the LLM-written narrative (requires `pip install ai-jidoka-framework[llm]`).
+# Default model for the LLM-written narrative (requires `pip install ai-kaizen-framework[llm]`).
 DEFAULT_MODEL = "claude-opus-4-8"
 
 

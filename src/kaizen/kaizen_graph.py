@@ -31,7 +31,7 @@ try:
     from langgraph.graph import StateGraph, END
 except ImportError as exc:  # pragma: no cover
     raise ImportError(
-        "The AI Jidoka Framework requires LangGraph. Install it with: pip install langgraph"
+        "The AI Kaizen Framework requires LangGraph. Install it with: pip install langgraph"
     ) from exc
 
 from .config import KaizenConfig

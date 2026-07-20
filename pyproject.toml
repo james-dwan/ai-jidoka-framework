@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ai-jidoka-framework"
+name = "ai-kaizen-framework"
 version = "0.1.0"
 description = "Human-AI Collaborative Kaizen for LangGraph agentic systems: Jidoka, SQDIP, 5 Whys, FMEA, and shared Kanban."
 readme = "README.md"
@@ -29,8 +29,8 @@ llm = ["langchain-anthropic>=0.3"]
 dev = ["pytest>=8.0", "ruff>=0.4"]
 
 [project.urls]
-Homepage = "https://github.com/james-dwan/ai-jidoka-framework"
-Issues = "https://github.com/james-dwan/ai-jidoka-framework/issues"
+Homepage = "https://github.com/james-dwan/ai-kaizen-framework"
+Issues = "https://github.com/james-dwan/ai-kaizen-framework/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/kaizen"]

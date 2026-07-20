@@ -1,6 +1,6 @@
 # Example: Professional Services Invoicing
 
-A complete, runnable example of the AI Jidoka Framework applied to a monthly
+A complete, runnable example of the AI Kaizen Framework applied to a monthly
 invoicing process for a professional services firm.
 
 ## The process

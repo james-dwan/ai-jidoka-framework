@@ -1,6 +1,6 @@
-"""AI Jidoka Framework — Human-AI Collaborative Kaizen for LangGraph agentic systems.
+"""AI Kaizen Framework — Human-AI Collaborative Kaizen for LangGraph agentic systems.
 
-AI Jidoka is the practice of intelligent human-machine partnership — where AI
+AI Kaizen is the practice of intelligent human-machine partnership — where AI
 and humans work together with shared awareness, perform daily improvement
 katas, conduct root cause analysis, and continuously evolve both the automated
 process and human standard work.

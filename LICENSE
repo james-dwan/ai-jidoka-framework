@@ -21,10 +21,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-### 2. `docs/AI-Jidoka-Framework-White-Paper.md`
+### 2. `docs/AI-Kaizen-Framework-White-Paper.md`
 
 ```markdown
-# AI Jidoka Framework: Human-Machine Partnership for Daily Collaborative Improvement
+# AI Kaizen Framework: Human-Machine Partnership for Daily Collaborative Improvement
 
 **Author**: James Dwan, Catalyst Consulting  
 **Version**: 1.0 – July 2026
@@ -33,7 +33,7 @@ SOFTWARE.
 
 Current agentic AI systems excel at automating complex workflows but often fall short in delivering sustainable operational excellence. Many implementations become static after deployment, with improvements driven primarily by technical teams. This creates bottlenecks, reduces business ownership, and prevents the rapid, daily learning cycles essential for long-term success.
 
-This white paper presents the **AI Jidoka Framework** — a philosophical and practical approach that embeds daily human-AI collaborative improvement (Kaizen) into agentic systems built on LangGraph.
+This white paper presents the **AI Kaizen Framework** — a philosophical and practical approach that embeds daily human-AI collaborative improvement (Kaizen) into agentic systems built on LangGraph.
 
 Inspired by the true spirit of Jidoka — intelligent collaboration between humans and machines — the framework enables AI agents and humans to practice structured daily improvement katas together. It features:
 - Structured exception management via shared Kanban
@@ -48,7 +48,7 @@ The framework is designed to be implemented with existing tools (LangGraph, Powe
 
 ## Conclusion
 
-The **AI Jidoka Framework** reimagines agentic systems as platforms for ongoing human-machine partnership. By embedding daily collaborative improvement katas, organizations can achieve not just automation, but true operational excellence that evolves with the people and processes it serves.
+The **AI Kaizen Framework** reimagines agentic systems as platforms for ongoing human-machine partnership. By embedding daily collaborative improvement katas, organizations can achieve not just automation, but true operational excellence that evolves with the people and processes it serves.
 
 **Copyright © 2026 James Dwan, Catalyst Consulting**  
 This work is licensed under the MIT License.

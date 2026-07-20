@@ -1,6 +1,6 @@
 """The Kaizen Teammate — an agent that works the board autonomously.
 
-This is the heart of AI Jidoka as partnership: the agent doesn't wait to be
+This is the heart of AI Kaizen as partnership: the agent doesn't wait to be
 summoned. It watches the shared Kanban board and advances every open exception
 ticket as far as the *evidence* allows:
 

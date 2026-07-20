@@ -1,4 +1,4 @@
-# Live demo runbook — AI Jidoka Framework
+# Live demo runbook — AI Kaizen Framework
 
 ~10 minutes end to end. Run everything from this folder with the virtualenv
 active and `ANTHROPIC_API_KEY` in the repo-root `.env`.

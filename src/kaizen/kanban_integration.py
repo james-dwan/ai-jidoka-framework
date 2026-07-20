@@ -122,7 +122,7 @@ class _GraphBoard(KanbanBoard):
         self._token_provider = token_provider
 
     def _request(self, method: str, url: str, payload: Optional[dict] = None) -> dict:
-        import requests  # optional dependency: pip install ai-jidoka-framework[m365]
+        import requests  # optional dependency: pip install ai-kaizen-framework[m365]
 
         response = requests.request(
             method,

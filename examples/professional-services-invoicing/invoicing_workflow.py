@@ -1,4 +1,4 @@
-"""Professional services invoicing with the AI Jidoka Framework.
+"""Professional services invoicing with the AI Kaizen Framework.
 
 Pipeline: load delivery reports -> validate -> aggregate hours -> calculate
 invoice -> raise invoice. Every step is watched by the abnormality rules in

@@ -1,4 +1,4 @@
-"""Configuration layer for the AI Jidoka Framework.
+"""Configuration layer for the AI Kaizen Framework.
 
 Business users edit a single YAML file — rules, prompts, SQDIP targets, and
 human standard work — without touching code. Every save creates a new version

@@ -1,4 +1,4 @@
-# Contributing to the AI Jidoka Framework
+# Contributing to the AI Kaizen Framework
 
 Thank you for wanting to improve this project — continuous improvement is
 rather the point.
@@ -20,8 +20,8 @@ rather the point.
 ## Development setup
 
 ```bash
-git clone https://github.com/james-dwan/ai-jidoka-framework.git
-cd ai-jidoka-framework
+git clone https://github.com/james-dwan/ai-kaizen-framework.git
+cd ai-kaizen-framework
 python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 pytest

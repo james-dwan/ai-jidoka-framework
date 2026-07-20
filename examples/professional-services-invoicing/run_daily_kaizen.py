@@ -4,7 +4,7 @@ Run after (one or more) invoicing runs:
 
     python run_daily_kaizen.py            # deterministic summary
     python run_daily_kaizen.py --llm      # narrative written by Claude
-                                          # (pip install 'ai-jidoka-framework[llm]'
+                                          # (pip install 'ai-kaizen-framework[llm]'
                                           #  and set ANTHROPIC_API_KEY)
 
 The summary is written to kaizen_reports/ and posted to the shared Kanban
@@ -38,7 +38,7 @@ def main() -> None:
         except Exception as exc:
             print(f"[!] Claude narration unavailable ({exc}).\n"
                   "    Install the extra and set your key:\n"
-                  "      pip install 'ai-jidoka-framework[llm]'\n"
+                  "      pip install 'ai-kaizen-framework[llm]'\n"
                   "      export ANTHROPIC_API_KEY=...\n"
                   "    Continuing with the deterministic summary.\n")
 

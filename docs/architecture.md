@@ -1,4 +1,4 @@
-# AI Jidoka Framework — Architecture
+# AI Kaizen Framework — Architecture
 
 ## High-level overview
 

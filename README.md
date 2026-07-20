@@ -1,4 +1,4 @@
-# AI Jidoka Framework
+# AI Kaizen Framework
 
 **Human-AI Collaborative Kaizen for Agentic Systems**
 
@@ -12,13 +12,19 @@ together.
 
 ## Philosophy
 
-AI Jidoka is the practice of intelligent human-machine partnership — where AI
+AI Kaizen is the practice of intelligent human-machine partnership — where AI
 and humans work together with shared awareness, perform daily improvement
 katas, conduct root cause analysis, and continuously evolve both the automated
 process and human standard work. The focus is on true collaboration, not
 automation with occasional human oversight.
 
-Read the full [white paper](docs/AI-Jidoka-Framework-White-Paper.md).
+**Jidoka** — stopping the line and making a problem visible the moment an
+abnormality occurs — is one pillar of that practice (it's where the partnership
+begins), alongside SQDIP metrics, the daily kata, 5 Whys, FMEA, and standard
+work. Kaizen is the whole: the continuous, daily improvement loop those pillars
+serve.
+
+Read the full [white paper](docs/AI-Kaizen-Framework-White-Paper.md).
 
 ## What you get
 
@@ -39,8 +45,8 @@ Read the full [white paper](docs/AI-Jidoka-Framework-White-Paper.md).
 ## Quick start
 
 ```bash
-git clone https://github.com/james-dwan/ai-jidoka-framework.git
-cd ai-jidoka-framework
+git clone https://github.com/james-dwan/ai-kaizen-framework.git
+cd ai-kaizen-framework
 pip install -e .
 
 cd examples/professional-services-invoicing
@@ -115,7 +121,7 @@ works. Microsoft 365 is first-class; the core works with anything.
 - **`local`** (default) — a JSON file; zero configuration, ideal for
   development and sandbox experiments
 - **`planner`** — Microsoft Planner via Microsoft Graph
-  (`pip install 'ai-jidoka-framework[m365]'`)
+  (`pip install 'ai-kaizen-framework[m365]'`)
 - **`lists`** — Microsoft Lists (SharePoint) via Microsoft Graph
 - Anything else — implement the three-method `KanbanBoard` ABC
 
@@ -125,9 +131,9 @@ code, client secret, managed identity — whatever your tenant requires).
 ## Optional extras
 
 ```bash
-pip install 'ai-jidoka-framework[m365]'   # Microsoft Planner / Lists boards
-pip install 'ai-jidoka-framework[llm]'    # Claude-written daily reflections
-pip install 'ai-jidoka-framework[dev]'    # tests + lint
+pip install 'ai-kaizen-framework[m365]'   # Microsoft Planner / Lists boards
+pip install 'ai-kaizen-framework[llm]'    # Claude-written daily reflections
+pip install 'ai-kaizen-framework[dev]'    # tests + lint
 ```
 
 ## Repository layout
