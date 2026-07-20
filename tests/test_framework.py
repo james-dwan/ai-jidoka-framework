@@ -771,3 +771,142 @@ def test_pilot_target_change_replays_the_log(tmp_path):
     p = registry.pilot(p.id)
     assert p.pilot["before"]["missed"] is True
     assert p.pilot["after"]["missed"] is False
+
+
+# -- Planner adapter (against a faithful in-memory Graph fake) --------------
+
+import re as _re  # noqa: E402
+
+from kaizen.kanban_integration import PlannerKanbanBoard  # noqa: E402
+
+BUCKET_IDS = {"Problems": "b-prob", "Daily Kaizen": "b-kaizen",
+              "Improvement Ideas": "b-ideas", "Experiments": "b-exp"}
+
+
+class FakePlanner(PlannerKanbanBoard):
+    """PlannerKanbanBoard with `_request` replaced by an in-memory Graph.
+
+    Faithful where it matters: tasks and details are separate resources with
+    separate etags, and every PATCH must present the current etag (as Graph
+    requires) or it fails — so the adapter's etag handling is really exercised.
+    """
+
+    def __init__(self):
+        super().__init__(plan_id="plan-1", bucket_ids=BUCKET_IDS, token_provider=lambda: "fake")
+        self.tasks: dict = {}
+        self.details: dict = {}
+        self.calls: list = []
+        self._seq = 0
+
+    def _bump(self, resource):
+        self._seq += 1
+        resource["@odata.etag"] = f'W/"{self._seq}"'
+
+    def _request(self, method, url, payload=None, etag=None):
+        path = url.replace(self.GRAPH, "")
+        self.calls.append((method, path))
+        if method == "POST" and path == "/planner/tasks":
+            task_id = f"task-{len(self.tasks) + 1}"
+            task = {"id": task_id, "percentComplete": 0, "priority": 5,
+                    "assignments": {}, **payload}
+            self._bump(task)
+            self.tasks[task_id] = task
+            det = {"description": "", "checklist": {}}
+            self._bump(det)
+            self.details[task_id] = det
+            return task
+        if method == "GET" and (m := _re.fullmatch(r"/planner/plans/([\w-]+)/tasks", path)):
+            assert m.group(1) == self.plan_id
+            return {"value": list(self.tasks.values())}
+        if m := _re.fullmatch(r"/planner/tasks/([\w-]+)/details", path):
+            det = self.details[m.group(1)]
+            if method == "GET":
+                return det
+            assert etag == det["@odata.etag"], "Graph requires the current details etag"
+            det.update(payload)
+            self._bump(det)
+            return {}
+        if m := _re.fullmatch(r"/planner/tasks/([\w-]+)", path):
+            task = self.tasks[m.group(1)]
+            if method == "GET":
+                return task
+            assert etag == task["@odata.etag"], "Graph requires the current task etag"
+            task.update(payload)
+            self._bump(task)
+            return {}
+        raise AssertionError(f"FakePlanner: unhandled {method} {path}")
+
+
+def test_planner_round_trip_create_read_update():
+    board = FakePlanner()
+    board.create_ticket(KanbanTicket(
+        title="[HIGH] missing-rate-card: hours cannot be billed",
+        description="**Problem:** no rate card",
+        bucket="Problems", priority="high", assignee="aad-user-1",
+        checklist=["Go and see", "5 Whys together"],
+    ))
+
+    tickets = board.list_tickets(bucket="Problems")
+    assert len(tickets) == 1
+    t = tickets[0]
+    assert t.description == "**Problem:** no rate card"     # details fetched on read
+    assert t.checklist == ["Go and see", "5 Whys together"]
+    assert t.priority == "high" and t.assignee == "aad-user-1"
+
+    # Update the analysis + drag across progress + move bucket — all etag-gated.
+    board.update_ticket(t.id, description=t.description + "\n\nWHY1: upstream",
+                        status="in_progress", bucket="Experiments")
+    t2 = board.list_tickets()[0]
+    assert "WHY1: upstream" in t2.description
+    assert t2.status == "in_progress" and t2.bucket == "Experiments"
+
+
+def test_planner_count_skips_details_calls():
+    board = FakePlanner()
+    for i in range(3):
+        board.create_ticket(KanbanTicket(title=f"t{i}", bucket="Problems"))
+    board.calls.clear()
+    assert board.open_ticket_count() == 3
+    assert not any("/details" in path for _, path in board.calls)   # cheap count
+
+
+def test_teammate_runs_unchanged_against_planner(tmp_path):
+    """The point of the adapter: the autonomous teammate's read-append-analysis
+    loop works on the Planner surface exactly as on the local board."""
+    board = FakePlanner()
+    config = make_config(tmp_path, rules=[
+        {"name": "too-big", "condition": "state.get('doubled', 0) > 5",
+         "severity": "high", "description": "Doubled value exceeded the limit"}])
+    runlog = RunLog(str(tmp_path / "log.jsonl"))
+    builder = KaizenGraphBuilder(State, config, board=board, runlog=runlog)
+    builder.add_node("double", double)
+    builder.set_entry_point("double")
+    builder.set_finish_point("double")
+    builder.compile().invoke({"value": 10})     # line-stop -> card on the "plan"
+
+    llm = StubLLM([RESPONSE_WITH_QUESTION, RESPONSE_COMPLETE])
+    teammate = KaizenTeammate(config, board, runlog=runlog, llm=llm)
+    assert teammate.work_board() == 1
+    t = board.list_tickets(bucket="Problems")[0]
+    assert t.status == "in_progress"                 # percentComplete 50 on the task
+    assert "Needs from the team" in t.description    # analysis written to details
+
+    # A human answers in the Planner UI (a details edit) -> next pass continues.
+    board.update_ticket(t.id, description=t.description +
+                        "\n\n**Note (2026-07-20 09:00):** Feed switched to pre-scaled units.")
+    assert teammate.work_board() == 1
+    t = board.list_tickets(bucket="Problems")[0]
+    assert "Proposal ready for team review" in t.description
+    assert teammate.work_board() == 0                # rev marker survives Planner round-trip
+
+
+def test_proposal_card_lands_assigned_to_owner_on_planner(tmp_path):
+    board = FakePlanner()
+    config = make_config(tmp_path)
+    config.data["process_owner"] = "owner.person"
+    config.data["kanban"]["owner_user_id"] = "aad-owner-guid"
+    registry = ProposalRegistry(config, runlog=RunLog(str(tmp_path / "log.jsonl")),
+                                board=board, path=str(tmp_path / "proposals.json"))
+    registry.propose(title="x", path=["jidoka", "stop_on_severity"], new_value="medium")
+    card = board.list_tickets(bucket="Experiments")[0]
+    assert card.assignee == "aad-owner-guid"         # in the owner's own task list

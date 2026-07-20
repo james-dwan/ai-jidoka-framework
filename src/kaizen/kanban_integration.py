@@ -34,6 +34,7 @@ class KanbanTicket:
     priority: str = "medium"  # low | medium | high | urgent
     checklist: List[str] = field(default_factory=list)
     due: Optional[str] = None  # ISO date
+    assignee: Optional[str] = None  # who owns the card (Planner: AAD user id -> assignment)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     status: str = "open"  # open | in_progress | done
     created_at: str = field(
@@ -121,109 +122,172 @@ class _GraphBoard(KanbanBoard):
     def __init__(self, token_provider: Callable[[], str]):
         self._token_provider = token_provider
 
-    def _request(self, method: str, url: str, payload: Optional[dict] = None) -> dict:
+    def _request(self, method: str, url: str, payload: Optional[dict] = None,
+                 etag: Optional[str] = None) -> dict:
+        """All Graph traffic goes through here (tests fake this one seam).
+
+        ``etag`` sends ``If-Match`` — Graph requires it on every PATCH so a
+        concurrent edit (a human in the Planner UI) fails loudly instead of
+        being silently overwritten.
+        """
         import requests  # optional dependency: pip install ai-kaizen-framework[m365]
 
-        response = requests.request(
-            method,
-            url,
-            headers={
-                "Authorization": f"Bearer {self._token_provider()}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=30,
-        )
+        headers = {
+            "Authorization": f"Bearer {self._token_provider()}",
+            "Content-Type": "application/json",
+        }
+        if etag:
+            headers["If-Match"] = etag
+        response = requests.request(method, url, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         return response.json() if response.content else {}
 
 
+#: KanbanTicket priority <-> Planner's 0-10 priority bands.
+_PRIORITY_TO_PLANNER = {"urgent": 1, "high": 3, "medium": 5, "low": 9}
+
+
+def _planner_priority_to_label(value: int) -> str:
+    if value <= 1:
+        return "urgent"
+    if value <= 4:
+        return "high"
+    if value <= 7:
+        return "medium"
+    return "low"
+
+
 class PlannerKanbanBoard(_GraphBoard):
-    """Microsoft Planner board via Microsoft Graph.
+    """Microsoft Planner board via Microsoft Graph — the production surface.
 
     ``bucket_ids`` maps friendly bucket names (as used in the config, e.g.
     "Problems", "Daily Kaizen") to Planner bucket IDs.
+
+    Mapping notes:
+
+    - ``status`` <-> ``percentComplete`` (0 / 50 / 100) — Planner's "Group by
+      progress" columns, so a human dragging a task IS the status change
+    - ``description``/``checklist`` live on task *details* (a second resource
+      with its own etag); ``list_tickets`` fetches them per task by default —
+      one extra Graph call per task, so agents polling large plans should keep
+      the pass interval in minutes, not seconds
+    - ``assignee`` (an Azure AD user id) <-> a Planner assignment — this is how
+      the process owner gets a proposal card in their own Planner/Teams view
+    - every PATCH carries the current etag (``If-Match``), so a concurrent
+      human edit in the Planner UI surfaces as a 409/412 rather than being
+      silently clobbered; agents just retry on their next pass
     """
 
-    def __init__(self, plan_id: str, bucket_ids: Dict[str, str], token_provider: Callable[[], str]):
+    def __init__(self, plan_id: str, bucket_ids: Dict[str, str],
+                 token_provider: Callable[[], str]):
         super().__init__(token_provider)
         self.plan_id = plan_id
         self.bucket_ids = bucket_ids
+
+    # -- create ------------------------------------------------------------
 
     def create_ticket(self, ticket: KanbanTicket) -> KanbanTicket:
         bucket_id = self.bucket_ids.get(ticket.bucket)
         if bucket_id is None:
             raise KeyError(f"No Planner bucket ID configured for bucket '{ticket.bucket}'")
-        payload = {"planId": self.plan_id, "bucketId": bucket_id, "title": ticket.title}
+        payload: Dict[str, Any] = {
+            "planId": self.plan_id,
+            "bucketId": bucket_id,
+            "title": ticket.title,
+            "priority": _PRIORITY_TO_PLANNER.get(ticket.priority, 5),
+        }
         if ticket.due:
             payload["dueDateTime"] = f"{ticket.due}T00:00:00Z"
+        if ticket.assignee:
+            payload["assignments"] = {
+                ticket.assignee: {"@odata.type": "#microsoft.graph.plannerAssignment",
+                                  "orderHint": " !"},
+            }
         task = self._request("POST", f"{self.GRAPH}/planner/tasks", payload)
         ticket.id = task["id"]
-        # Description and checklist live on task *details*, patched separately.
-        details = self._request("GET", f"{self.GRAPH}/planner/tasks/{ticket.id}/details")
-        checklist = {
-            uuid.uuid4().hex: {"@odata.type": "microsoft.graph.plannerChecklistItem",
-                               "title": item, "isChecked": False}
-            for item in ticket.checklist
-        }
-        self._patch_details(ticket.id, details["@odata.etag"],
-                            {"description": ticket.description, "checklist": checklist})
+        if ticket.description or ticket.checklist:
+            self._patch_description(ticket.id, ticket.description, ticket.checklist)
         return ticket
 
-    def _patch_details(self, task_id: str, etag: str, payload: dict) -> None:
-        import requests
-
-        response = requests.patch(
-            f"{self.GRAPH}/planner/tasks/{task_id}/details",
-            headers={
-                "Authorization": f"Bearer {self._token_provider()}",
-                "Content-Type": "application/json",
-                "If-Match": etag,
-            },
-            json=payload,
-            timeout=30,
-        )
-        response.raise_for_status()
+    # -- update ------------------------------------------------------------
 
     def update_ticket(self, ticket_id: str, **changes: Any) -> None:
-        task = self._request("GET", f"{self.GRAPH}/planner/tasks/{ticket_id}")
         payload: Dict[str, Any] = {}
         if "status" in changes:
             payload["percentComplete"] = {"open": 0, "in_progress": 50, "done": 100}[changes["status"]]
         if "title" in changes:
             payload["title"] = changes["title"]
+        if "bucket" in changes:
+            bucket_id = self.bucket_ids.get(changes["bucket"])
+            if bucket_id is None:
+                raise KeyError(f"No Planner bucket ID configured for bucket '{changes['bucket']}'")
+            payload["bucketId"] = bucket_id
+        if "priority" in changes:
+            payload["priority"] = _PRIORITY_TO_PLANNER.get(changes["priority"], 5)
+        if "assignee" in changes and changes["assignee"]:
+            payload["assignments"] = {
+                changes["assignee"]: {"@odata.type": "#microsoft.graph.plannerAssignment",
+                                      "orderHint": " !"},
+            }
         if payload:
-            import requests
+            task = self._request("GET", f"{self.GRAPH}/planner/tasks/{ticket_id}")
+            self._request("PATCH", f"{self.GRAPH}/planner/tasks/{ticket_id}",
+                          payload, etag=task["@odata.etag"])
+        if "description" in changes:
+            self._patch_description(ticket_id, changes["description"], None)
 
-            response = requests.patch(
-                f"{self.GRAPH}/planner/tasks/{ticket_id}",
-                headers={
-                    "Authorization": f"Bearer {self._token_provider()}",
-                    "Content-Type": "application/json",
-                    "If-Match": task["@odata.etag"],
-                },
-                json=payload,
-                timeout=30,
-            )
-            response.raise_for_status()
+    def _patch_description(self, task_id: str, description: Optional[str],
+                           checklist: Optional[List[str]]) -> None:
+        # Description and checklist live on the task's *details* resource,
+        # which has its own etag independent of the task's.
+        details = self._request("GET", f"{self.GRAPH}/planner/tasks/{task_id}/details")
+        payload: Dict[str, Any] = {}
+        if description is not None:
+            payload["description"] = description
+        if checklist:
+            payload["checklist"] = {
+                uuid.uuid4().hex: {"@odata.type": "microsoft.graph.plannerChecklistItem",
+                                   "title": item, "isChecked": False}
+                for item in checklist
+            }
+        self._request("PATCH", f"{self.GRAPH}/planner/tasks/{task_id}/details",
+                      payload, etag=details["@odata.etag"])
 
-    def list_tickets(self, bucket: Optional[str] = None, status: Optional[str] = None) -> List[KanbanTicket]:
+    # -- read --------------------------------------------------------------
+
+    def list_tickets(self, bucket: Optional[str] = None, status: Optional[str] = None,
+                     include_details: bool = True) -> List[KanbanTicket]:
         tasks = self._request("GET", f"{self.GRAPH}/planner/plans/{self.plan_id}/tasks").get("value", [])
         id_to_bucket = {v: k for k, v in self.bucket_ids.items()}
         result = []
         for task in tasks:
+            assignments = task.get("assignments") or {}
             t = KanbanTicket(
                 title=task["title"],
                 bucket=id_to_bucket.get(task.get("bucketId"), task.get("bucketId", "")),
                 id=task["id"],
                 status={0: "open", 100: "done"}.get(task.get("percentComplete", 0), "in_progress"),
+                priority=_planner_priority_to_label(task.get("priority", 5)),
+                assignee=next(iter(assignments), None),
             )
             if bucket and t.bucket != bucket:
                 continue
             if status and t.status != status:
                 continue
+            if include_details:
+                # The agents' whole collaboration loop reads/writes the
+                # description, so details are fetched by default. Pass
+                # include_details=False for cheap counts (e.g. Inventory).
+                details = self._request("GET", f"{self.GRAPH}/planner/tasks/{t.id}/details")
+                t.description = details.get("description") or ""
+                t.checklist = [item.get("title", "")
+                               for item in (details.get("checklist") or {}).values()]
             result.append(t)
         return result
+
+    def open_ticket_count(self) -> int:
+        # Counting doesn't need descriptions — skip the per-task details calls.
+        return len(self.list_tickets(status="open", include_details=False))
 
 
 class ListsKanbanBoard(_GraphBoard):

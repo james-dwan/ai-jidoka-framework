@@ -104,7 +104,7 @@ class ChangeProposal:
         set_at(candidate, self.path, self.new_value)
         return candidate
 
-    def to_card(self, bucket: str = "Experiments") -> KanbanTicket:
+    def to_card(self, bucket: str = "Experiments", assignee: Optional[str] = None) -> KanbanTicket:
         lines = [
             f"**Proposed by:** {self.proposed_by}  \n"
             f"**Standard work:** {self.register} ({_path_label(self.path)})",
@@ -125,6 +125,8 @@ class ChangeProposal:
             bucket=bucket,
             labels=["proposal", self.register, "ai-raised" if self.by_agent else "human-raised"],
             priority="low",
+            assignee=assignee,   # the decision is the owner's: on Planner this
+                                 # puts the card in their own task list
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -276,7 +278,12 @@ class ProposalRegistry:
                            register=proposal.register, proposed_by=proposed_by)
         if self.board and not self.config.sandbox:
             bucket = self.config.kanban.get("buckets", {}).get("experiments", "Experiments")
-            self.board.create_ticket(proposal.to_card(bucket))
+            # Assign the card to the process owner — the decision is theirs.
+            # On Planner, `owner_user_id` (an Azure AD object id) makes it a
+            # real assignment in their Teams/Planner view; locally the owner's
+            # name is stored on the card.
+            assignee = self.config.kanban.get("owner_user_id") or self.config.process_owner or None
+            self.board.create_ticket(proposal.to_card(bucket, assignee=assignee))
         return proposal
 
     # -- pilot (safe, evidence-gathering) ---------------------------------

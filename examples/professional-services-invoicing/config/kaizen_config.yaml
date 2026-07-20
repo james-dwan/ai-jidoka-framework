@@ -167,9 +167,15 @@ kanban:
     kaizen: Daily Kaizen
     ideas: Improvement Ideas
     experiments: Experiments
+  # To run the same agents against Microsoft Planner, switch the provider and
+  # pass a token_provider callable (your azure-identity flow) to create_board /
+  # KaizenGraphBuilder. Status maps to Planner's progress columns, analyses to
+  # task notes, and proposal cards are assigned to the owner via owner_user_id.
   # provider: planner
   # plan_id: "<planner-plan-id>"
+  # owner_user_id: "<process owner's Azure AD object id>"
   # bucket_ids:
   #   Problems: "<bucket-id>"
   #   Daily Kaizen: "<bucket-id>"
+  #   Improvement Ideas: "<bucket-id>"
   #   Experiments: "<bucket-id>"

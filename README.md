@@ -123,7 +123,12 @@ works. Microsoft 365 is first-class; the core works with anything.
 - **`local`** (default) — a JSON file; zero configuration, ideal for
   development and sandbox experiments
 - **`planner`** — Microsoft Planner via Microsoft Graph
-  (`pip install 'ai-kaizen-framework[m365]'`)
+  (`pip install 'ai-kaizen-framework[m365]'`). Full round-trip: statuses map to
+  Planner's progress columns (dragging a task IS the status change), analyses
+  live in task notes, checklists and priorities carry over, every write is
+  etag-guarded against concurrent human edits, and proposal cards are
+  *assigned* to the process owner so approvals sit in their own Teams view.
+  The autonomous teammate runs unchanged against it.
 - **`lists`** — Microsoft Lists (SharePoint) via Microsoft Graph
 - Anything else — implement the three-method `KanbanBoard` ABC
 
