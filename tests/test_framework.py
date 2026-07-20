@@ -910,3 +910,26 @@ def test_proposal_card_lands_assigned_to_owner_on_planner(tmp_path):
     registry.propose(title="x", path=["jidoka", "stop_on_severity"], new_value="medium")
     card = board.list_tickets(bucket="Experiments")[0]
     assert card.assignee == "aad-owner-guid"         # in the owner's own task list
+
+
+def test_dashboard_renders_report_markdown(tmp_path):
+    from kaizen.dashboard import _md_to_html
+
+    md = ("# Daily Kaizen — test — 2026-07-20\n\n"
+          "## SQDIP\n"
+          "| SQDIP | Today |\n|---|---|\n| **S**afety | 1 incidents |\n\n"
+          "## Reflection\n"
+          "Most frequent abnormality: **missing-reports** (3x).\n\n"
+          "## Today's kata\n"
+          "- Review the summary together.\n"
+          "- Pick one pattern.\n\n"
+          "1. First\n2. Second\n")
+    out = _md_to_html(md)
+    assert "<h3>Daily Kaizen — test — 2026-07-20</h3>" in out      # heading shifted
+    assert "<table>" in out and "<th>SQDIP</th>" in out            # table rendered
+    assert "<strong>S</strong>afety" in out                         # bold inside cells
+    assert "|---|" not in out and "## " not in out                  # no raw markdown
+    assert out.count("<li>") == 4 and "<ol>" in out and "<ul>" in out
+    assert "<strong>missing-reports</strong>" in out
+    # Escaping still applies: markup in the report can't inject HTML.
+    assert "<script>" not in _md_to_html("hello <script>alert(1)</script>")

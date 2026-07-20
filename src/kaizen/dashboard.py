@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import html
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -146,14 +147,74 @@ def _board_columns(tickets_by_bucket: Dict[str, List]) -> str:
     return "\n".join(columns)
 
 
+def _inline_md(text: str) -> str:
+    """Escape, then render the inline markdown the reports use: **bold**, `code`."""
+    out = html.escape(text)
+    out = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
+    out = re.sub(r"`([^`]+)`", r"<code>\1</code>", out)
+    return out
+
+
+def _md_to_html(md: str) -> str:
+    """A tiny renderer for the subset of markdown the Kaizen reports contain —
+    headings, pipe tables, bullet/numbered lists, bold, code — keeping the
+    dashboard dependency-free. Headings are shifted down two levels so the
+    report nests under the dashboard's own section heading."""
+    blocks: List[str] = []
+    lines = md.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i].rstrip()
+        if not line.strip():
+            i += 1
+            continue
+        if line.startswith("|"):                                   # pipe table
+            rows = []
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+                if not all(re.fullmatch(r":?-{2,}:?", c) for c in cells):  # skip |---| row
+                    rows.append(cells)
+                i += 1
+            head, body = rows[0], rows[1:]
+            table = ["<table><thead><tr>"]
+            table += [f"<th>{_inline_md(c)}</th>" for c in head]
+            table.append("</tr></thead><tbody>")
+            for row in body:
+                table.append("<tr>" + "".join(f"<td>{_inline_md(c)}</td>" for c in row) + "</tr>")
+            table.append("</tbody></table>")
+            blocks.append("".join(table))
+            continue
+        if m := re.match(r"(#{1,4})\s+(.*)", line):                # heading, shifted +2
+            level = min(len(m.group(1)) + 2, 6)
+            blocks.append(f"<h{level}>{_inline_md(m.group(2))}</h{level}>")
+            i += 1
+            continue
+        if re.match(r"[-*]\s+", line) or re.match(r"\d+\.\s+", line):   # list
+            ordered = bool(re.match(r"\d+\.\s+", line))
+            pattern = r"\d+\.\s+" if ordered else r"[-*]\s+"
+            items = []
+            while i < len(lines) and re.match(pattern, lines[i].strip()):
+                items.append(f"<li>{_inline_md(re.sub(pattern, '', lines[i].strip(), count=1))}</li>")
+                i += 1
+            tag = "ol" if ordered else "ul"
+            blocks.append(f"<{tag}>{''.join(items)}</{tag}>")
+            continue
+        paragraph = []                                             # paragraph
+        while i < len(lines) and lines[i].strip() and not re.match(r"(\||#{1,4}\s|[-*]\s|\d+\.\s)", lines[i].strip()):
+            paragraph.append(lines[i].strip())
+            i += 1
+        blocks.append(f"<p>{_inline_md(' '.join(paragraph))}</p>")
+    return "\n".join(blocks)
+
+
 def _render(config, day, sqdip, pareto, tickets_by_bucket, latest_report) -> str:
     sandbox = ('<span class="chip sandbox">SANDBOX</span>' if config.sandbox else "")
     report_section = ""
     if latest_report:
         report_section = (
             '<section><h2>Latest daily Kaizen report</h2>'
-            f'<details open><summary>view</summary><pre>{html.escape(latest_report)}</pre>'
-            "</details></section>"
+            f'<div class="report">{_md_to_html(latest_report)}</div>'
+            "</section>"
         )
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -230,9 +291,22 @@ def _render(config, day, sqdip, pareto, tickets_by_bucket, latest_report) -> str
   .chip.urgent, .chip.high {{ border-color: var(--critical); color: var(--critical); }}
   .chip.medium {{ border-color: var(--serious); color: var(--serious); }}
   .chip.sandbox {{ border-color: var(--warning); color: var(--ink-2); margin-left: 8px; }}
-  pre {{ white-space: pre-wrap; background: var(--page); border: 1px solid var(--border);
-         border-radius: 8px; padding: 12px; color: var(--ink-2); }}
-  summary {{ cursor: pointer; color: var(--muted); }}
+  /* Rendered daily report */
+  .report {{ background: var(--page); border: 1px solid var(--border);
+             border-radius: 8px; padding: 4px 18px 14px; }}
+  .report h3 {{ font-size: 15px; margin: 14px 0 6px; }}
+  .report h4 {{ font-size: 13px; margin: 14px 0 6px; text-transform: uppercase;
+                letter-spacing: 0.04em; color: var(--ink-2); }}
+  .report h5, .report h6 {{ font-size: 13px; margin: 12px 0 4px; }}
+  .report p {{ margin: 6px 0; color: var(--ink-2); }}
+  .report li {{ color: var(--ink-2); margin: 2px 0; }}
+  .report table {{ border-collapse: collapse; margin: 8px 0; }}
+  .report th, .report td {{ border: 1px solid var(--grid); padding: 4px 10px;
+                            text-align: left; }}
+  .report th {{ color: var(--ink); background: var(--surface); }}
+  .report td {{ color: var(--ink-2); }}
+  .report code {{ background: var(--surface); border: 1px solid var(--border);
+                  border-radius: 4px; padding: 0 4px; }}
 </style>
 </head>
 <body>
