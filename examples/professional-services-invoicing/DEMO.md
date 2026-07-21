@@ -99,11 +99,14 @@ Teammate runs in the background**, working the board autonomously:
 1. Within ~15s, watch it move exception tickets to **In progress** and fill in
    what the evidence supports — problem statements quote real recurrence data
    ("in 3 of 3 runs…"), and unknowable whys are left OPEN.
-2. Open a ticket: it ends with **"Needs from the team"** — precise questions
-   only a human can answer. **Add a note** answering one.
-3. Wait for the next pass: the teammate incorporates your answer and continues
-   — through to "Proposal ready for team review" once the chain is sound (its
-   own analysis is gated by the Sensei before it posts).
+2. Open a ticket: a rendered analysis ending in **"Needs from the team"** —
+   precise questions only a human can answer — with a **Conversation** thread
+   below. Put your name in the "You:" box, then **add a note** answering one.
+3. Wait for the next pass: the teammate folds your answer into the analysis
+   and **replies in the conversation** (🤖 bubble: "Thanks — I've folded your
+   notes into the analysis above…") — through to "Proposal ready for team
+   review" once the chain is sound (its own analysis is gated by the Sensei
+   before it posts).
 4. It never closes tickets — **you** drag verified work to Done.
 5. Raise your own **improvement idea** with the "Add card" box — the AI raises
    its ideas into the same bucket from the daily reflection.

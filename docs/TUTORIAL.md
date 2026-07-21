@@ -206,18 +206,24 @@ Teammate runs in the background and reports every pass:
 
 Now collaborate with it:
 
-1. **Watch the first pass** (it takes a minute — real investigations). The
+1. **Put your name in the "You:" box** (top right) — your notes will be posted
+   under it, so it's always clear who said what.
+2. **Watch the first pass** (it takes a minute — real investigations). The
    problem cards move to *In progress* and fill with analysis. Open one: the
-   problem statement quotes real evidence ("In 3 of 3 invoicing runs…"),
-   whys the evidence can't support are honestly marked OPEN, and it ends with
-   **"Needs from the team"** — precise questions only a human can answer.
-2. **Answer one.** In the ticket, type a note like
-   `none of us ever gets reminders` and click *Add note*.
-3. **Wait ~30 seconds.** The teammate detects your answer, incorporates it,
-   and continues — eventually to *"Proposal ready for team review."*
-4. **You close it, not the AI.** When a countermeasure is verified, *you* drag
+   analysis is a rendered document — problem statement quoting real evidence
+   ("In 3 of 3 invoicing runs…"), whys the evidence can't support honestly
+   marked OPEN, and **"Needs from the team"** — precise questions only a human
+   can answer. (Editing the raw text is behind the *Edit analysis* button.)
+3. **Answer one in the Conversation.** Type a note like
+   `none of us ever gets reminders` and click *Add note* — it appears as a
+   🧑 bubble under your name.
+4. **Wait ~30 seconds.** The teammate detects your note, folds it into the
+   analysis, and **replies in the conversation** as a 🤖 bubble — "Thanks —
+   I've folded your notes into the analysis above…" — continuing until
+   *"Proposal ready for team review."*
+5. **You close it, not the AI.** When a countermeasure is verified, *you* drag
    the card to Done. The teammate never closes work itself.
-5. **Raise your own idea** with the "Add card" box at the top.
+6. **Raise your own idea** with the "Add card" box at the top.
 
 The board deliberately offers only interactions Microsoft Planner also has
 (drag between progress columns, edit notes, add comments/cards) — there's no
